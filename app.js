@@ -1,53 +1,138 @@
 const EDGE_URL = "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp";
-const ACTION = "monthly_balance_summary";
+const ACTION = "employee_accrual_summary";
+const YEAR = 2026;
+const QUARTER_MONTHS = [7, 8, 9];
 
 const notFoundEl = document.getElementById("not-found");
 const appEl = document.getElementById("app");
-const summaryBodyEl = document.getElementById("summary-body");
+const totalAccrualEl = document.getElementById("total-accrual");
+const employeeListEl = document.getElementById("employee-list");
+const periodButtons = [...document.querySelectorAll(".period-button")];
+
+let selectedMonths = new Set(QUARTER_MONTHS);
+let requestVersion = 0;
 
 function showNotFound() {
   appEl.hidden = true;
   notFoundEl.hidden = false;
-  summaryBodyEl.replaceChildren();
-}
-
-function formatPeriod(row) {
-  const year = Number(row?.reporting_year);
-  const month = Number(row?.reporting_month);
-  if (!Number.isInteger(year) || !Number.isInteger(month)) return "—";
-  return `${String(month).padStart(2, "0")}.${year}`;
+  employeeListEl.replaceChildren();
 }
 
 function formatMoney(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "—";
   return `${new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(amount)} ₽`;
 }
 
-function appendCell(rowEl, text, className = "") {
-  const cell = document.createElement("td");
-  cell.textContent = text;
-  if (className) cell.className = className;
-  rowEl.append(cell);
+function sortedMonths() {
+  return [...selectedMonths].sort((a, b) => a - b);
 }
 
-function renderSummary(rows) {
-  const fragment = document.createDocumentFragment();
+function isAllSelected() {
+  return QUARTER_MONTHS.every((month) => selectedMonths.has(month));
+}
 
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    appendCell(tr, formatPeriod(row));
-    appendCell(tr, formatMoney(row.accrual_total), "money");
-    appendCell(tr, formatMoney(row.payment_total), "money");
-    appendCell(tr, formatMoney(row.balance_to_pay), "money strong");
-    fragment.append(tr);
+function syncPeriodButtons() {
+  const allSelected = isAllSelected();
+
+  for (const button of periodButtons) {
+    const isAllButton = button.dataset.period === "all";
+    const month = Number(button.dataset.month);
+    const active = isAllButton ? allSelected : selectedMonths.has(month);
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+}
+
+function renderEmployees(data) {
+  const employees = Array.isArray(data?.employees) ? data.employees : [];
+  totalAccrualEl.textContent = formatMoney(data?.total_accrual ?? 0);
+
+  const fragment = document.createDocumentFragment();
+  for (const employee of employees) {
+    const row = document.createElement("div");
+    row.className = "employee-row";
+    row.dataset.staffMemberId = String(employee.staff_member_id ?? "");
+
+    const name = document.createElement("span");
+    name.className = "employee-name";
+    name.textContent = employee.fio_full ?? "—";
+
+    const amount = document.createElement("strong");
+    amount.className = "employee-amount money";
+    amount.textContent = formatMoney(employee.accrual_total);
+
+    row.append(name, amount);
+    fragment.append(row);
   }
 
-  summaryBodyEl.replaceChildren(fragment);
+  employeeListEl.replaceChildren(fragment);
   notFoundEl.hidden = true;
   appEl.hidden = false;
+}
+
+async function loadAccruals(initData) {
+  const version = ++requestVersion;
+
+  try {
+    appEl.setAttribute("aria-busy", "true");
+
+    const response = await fetch(EDGE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        initData,
+        action: ACTION,
+        filters: {
+          year: YEAR,
+          months: sortedMonths(),
+        },
+      }),
+    });
+
+    if (version !== requestVersion) return;
+    if (!response.ok) return showNotFound();
+
+    const payload = await response.json();
+    if (
+      payload?.ok !== true ||
+      payload?.action !== ACTION ||
+      !payload?.data ||
+      !Array.isArray(payload.data.employees)
+    ) {
+      return showNotFound();
+    }
+
+    renderEmployees(payload.data);
+  } catch {
+    if (version === requestVersion) showNotFound();
+  } finally {
+    if (version === requestVersion) appEl.removeAttribute("aria-busy");
+  }
+}
+
+function handlePeriodClick(button, initData) {
+  if (button.dataset.period === "all") {
+    selectedMonths = new Set(QUARTER_MONTHS);
+  } else {
+    const month = Number(button.dataset.month);
+    if (!QUARTER_MONTHS.includes(month)) return;
+
+    if (isAllSelected()) {
+      selectedMonths = new Set([month]);
+    } else if (selectedMonths.has(month)) {
+      if (selectedMonths.size === 1) return;
+      selectedMonths.delete(month);
+    } else {
+      selectedMonths.add(month);
+    }
+  }
+
+  syncPeriodButtons();
+  loadAccruals(initData);
 }
 
 async function start() {
@@ -57,28 +142,14 @@ async function start() {
   const initData = webApp?.initData ?? "";
   if (!initData) return;
 
-  try {
-    webApp.ready();
+  webApp.ready();
+  syncPeriodButtons();
 
-    const response = await fetch(EDGE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        initData,
-        action: ACTION,
-        filters: { limit: 12 },
-      }),
-    });
-
-    if (!response.ok) return;
-
-    const payload = await response.json();
-    if (payload?.ok !== true || payload?.action !== ACTION || !Array.isArray(payload?.data)) return;
-
-    renderSummary(payload.data);
-  } catch {
-    showNotFound();
+  for (const button of periodButtons) {
+    button.addEventListener("click", () => handlePeriodClick(button, initData));
   }
+
+  await loadAccruals(initData);
 }
 
 start();
