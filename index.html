@@ -3,14 +3,38 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Mini App</title>
+  <title>Staff Cost</title>
   <link rel="stylesheet" href="./styles.css" />
   <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
 </head>
 <body>
   <main class="screen">
-    <h1 id="message">Страница не найдена</h1>
+    <section id="not-found" class="state-screen">
+      <h1>Страница не найдена</h1>
+    </section>
+
+    <section id="app" class="app" hidden>
+      <header class="page-header">
+        <p class="eyebrow">Staff Cost</p>
+        <h1>Общий баланс к выплате</h1>
+      </header>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Период</th>
+              <th>Начислено</th>
+              <th>Выплачено</th>
+              <th>К выплате</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
+
   <script src="./app.js"></script>
 </body>
 </html>
