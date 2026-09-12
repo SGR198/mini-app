@@ -1,5 +1,6 @@
 const EDGE_URL = "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp";
 const FALLBACK_MESSAGE = "Страница не найдена";
+const SUCCESS_MESSAGE = "Привет, я твой первый мини-апп";
 
 const messageEl = document.getElementById("message");
 
@@ -27,8 +28,8 @@ async function start() {
     if (!response.ok) return;
 
     const data = await response.json();
-    if (data?.ok === true && typeof data?.message === "string" && data.message.trim()) {
-      messageEl.textContent = data.message;
+    if (data?.ok === true) {
+      messageEl.textContent = SUCCESS_MESSAGE;
     }
   } catch {
     showNotFound();
