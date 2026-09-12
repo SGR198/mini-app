@@ -14,24 +14,19 @@
     </section>
 
     <section id="app" class="app" hidden>
-      <header class="page-header">
-        <p class="eyebrow">Staff Cost</p>
-        <h1>Общий баланс к выплате</h1>
-      </header>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Период</th>
-              <th>Начислено</th>
-              <th>Выплачено</th>
-              <th>К выплате</th>
-            </tr>
-          </thead>
-          <tbody id="summary-body"></tbody>
-        </table>
+      <div id="period-selector" class="period-selector" role="group" aria-label="Период начислений">
+        <button type="button" class="period-button" data-period="all" aria-pressed="true">Все</button>
+        <button type="button" class="period-button" data-month="7" aria-pressed="true">Июль</button>
+        <button type="button" class="period-button" data-month="8" aria-pressed="true">Август</button>
+        <button type="button" class="period-button" data-month="9" aria-pressed="true">Сентябрь</button>
       </div>
+
+      <div class="total-row">
+        <span>Итого начислено</span>
+        <strong id="total-accrual" class="money">0 ₽</strong>
+      </div>
+
+      <div id="employee-list" class="employee-list"></div>
     </section>
   </main>
 
