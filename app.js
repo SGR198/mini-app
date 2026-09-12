@@ -2,6 +2,11 @@ const EDGE_URL = "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-co
 const ACTION = "employee_accrual_summary";
 const YEAR = 2026;
 const QUARTER_MONTHS = [7, 8, 9];
+const MONTH_LABELS = {
+  7: "Июль",
+  8: "Август",
+  9: "Сентябрь",
+};
 
 const notFoundEl = document.getElementById("not-found");
 const appEl = document.getElementById("app");
@@ -10,6 +15,7 @@ const employeeListEl = document.getElementById("employee-list");
 const periodButtons = [...document.querySelectorAll(".period-button")];
 
 let selectedMonths = new Set(QUARTER_MONTHS);
+let expandedEmployeeIds = new Set();
 let requestVersion = 0;
 
 function showNotFound() {
@@ -47,26 +53,107 @@ function syncPeriodButtons() {
   }
 }
 
+function createChevron() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("employee-chevron");
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M5.5 7.5 10 12l4.5-4.5");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.8");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.append(path);
+
+  return svg;
+}
+
+function createPeriodRow(period) {
+  const row = document.createElement("div");
+  row.className = "period-detail-row";
+
+  const month = Number(period?.reporting_month);
+  const label = document.createElement("span");
+  label.className = "period-detail-label";
+  label.textContent = MONTH_LABELS[month] ?? String(month);
+
+  const amount = document.createElement("strong");
+  amount.className = "period-detail-amount money";
+  amount.textContent = formatMoney(period?.accrual_total);
+
+  row.append(label, amount);
+  return row;
+}
+
+function createEmployeeCard(employee) {
+  const staffMemberId = String(employee?.staff_member_id ?? "");
+  const detailsId = `employee-details-${staffMemberId}`;
+  const periods = Array.isArray(employee?.periods) ? employee.periods : [];
+  const isExpanded = expandedEmployeeIds.has(staffMemberId);
+
+  const card = document.createElement("section");
+  card.className = "employee-card";
+  card.dataset.staffMemberId = staffMemberId;
+
+  const summaryButton = document.createElement("button");
+  summaryButton.type = "button";
+  summaryButton.className = "employee-summary";
+  summaryButton.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  summaryButton.setAttribute("aria-controls", detailsId);
+
+  const name = document.createElement("span");
+  name.className = "employee-name";
+  name.textContent = employee?.fio_full ?? "—";
+
+  const amount = document.createElement("strong");
+  amount.className = "employee-amount money";
+  amount.textContent = formatMoney(employee?.accrual_total);
+
+  const chevron = createChevron();
+  summaryButton.append(name, amount, chevron);
+
+  const details = document.createElement("div");
+  details.id = detailsId;
+  details.className = "employee-details";
+  details.hidden = !isExpanded;
+
+  for (const period of periods) {
+    details.append(createPeriodRow(period));
+  }
+
+  summaryButton.addEventListener("click", () => {
+    const expanded = summaryButton.getAttribute("aria-expanded") === "true";
+    const nextExpanded = !expanded;
+
+    summaryButton.setAttribute("aria-expanded", nextExpanded ? "true" : "false");
+    details.hidden = !nextExpanded;
+    card.classList.toggle("expanded", nextExpanded);
+
+    if (nextExpanded) {
+      expandedEmployeeIds.add(staffMemberId);
+    } else {
+      expandedEmployeeIds.delete(staffMemberId);
+    }
+  });
+
+  card.classList.toggle("expanded", isExpanded);
+  card.append(summaryButton, details);
+  return card;
+}
+
 function renderEmployees(data) {
   const employees = Array.isArray(data?.employees) ? data.employees : [];
   totalAccrualEl.textContent = formatMoney(data?.total_accrual ?? 0);
 
+  const visibleIds = new Set(employees.map((employee) => String(employee?.staff_member_id ?? "")));
+  expandedEmployeeIds = new Set([...expandedEmployeeIds].filter((id) => visibleIds.has(id)));
+
   const fragment = document.createDocumentFragment();
   for (const employee of employees) {
-    const row = document.createElement("div");
-    row.className = "employee-row";
-    row.dataset.staffMemberId = String(employee.staff_member_id ?? "");
-
-    const name = document.createElement("span");
-    name.className = "employee-name";
-    name.textContent = employee.fio_full ?? "—";
-
-    const amount = document.createElement("strong");
-    amount.className = "employee-amount money";
-    amount.textContent = formatMoney(employee.accrual_total);
-
-    row.append(name, amount);
-    fragment.append(row);
+    fragment.append(createEmployeeCard(employee));
   }
 
   employeeListEl.replaceChildren(fragment);
