@@ -14,17 +14,23 @@
     </section>
 
     <section id="app" class="app" hidden>
-      <div id="period-selector" class="period-selector" role="group" aria-label="Период начислений">
-        <button type="button" class="period-button" data-period="all" aria-pressed="true">Все</button>
-        <button type="button" class="period-button" data-month="7" aria-pressed="true">Июль</button>
-        <button type="button" class="period-button" data-month="8" aria-pressed="true">Август</button>
-        <button type="button" class="period-button" data-month="9" aria-pressed="true">Сентябрь</button>
-      </div>
+      <header class="page-header">
+        <h1>Начисления сотрудников</h1>
+      </header>
 
-      <div class="total-row">
-        <span>Итого начислено</span>
-        <strong id="total-accrual" class="money">0 ₽</strong>
-      </div>
+      <section class="period-panel" aria-label="Выбор периода">
+        <div id="period-selector" class="period-selector" role="group" aria-label="Период начислений">
+          <button type="button" class="period-button" data-period="all" aria-pressed="true">Все</button>
+          <button type="button" class="period-button" data-month="7" aria-pressed="true">Июль</button>
+          <button type="button" class="period-button" data-month="8" aria-pressed="true">Август</button>
+          <button type="button" class="period-button" data-month="9" aria-pressed="true">Сентябрь</button>
+        </div>
+      </section>
+
+      <section class="total-card" aria-label="Итого начислено">
+        <span class="total-label">Итого начислено</span>
+        <strong id="total-accrual" class="total-amount money">0 ₽</strong>
+      </section>
 
       <div id="employee-list" class="employee-list"></div>
     </section>
