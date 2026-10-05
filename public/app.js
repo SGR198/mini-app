@@ -1,4 +1,4 @@
-const EDGE_URL = "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp";
+const API_URL = "/api/staff-cost";
 const ACTION = "employee_accrual_summary";
 const YEAR = 2026;
 const QUARTER_MONTHS = [7, 8, 9];
@@ -167,7 +167,7 @@ async function loadAccruals(initData) {
   try {
     appEl.setAttribute("aria-busy", "true");
 
-    const response = await fetch(EDGE_URL, {
+    const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
