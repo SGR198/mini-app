@@ -6,36 +6,41 @@ Telegram Mini App для внутренних интерфейсов базы д
 
 ## Runtime
 
-Production frontend:
+Production runtime:
 
 ```text
-GitHub private source
+GitHub source
   -> Cloudflare Workers Builds
   -> Worker: database-miniapp
-  -> Workers Static Assets
+       ├── Workers Static Assets
+       └── /api/staff-cost
+              -> Supabase Edge Function staff-cost-miniapp
+              -> runtime_api
+              -> staff_cost
 ```
 
 Frontend находится в `public/`.
-
+Worker gateway находится в `src/index.js`.
 Cloudflare configuration: `wrangler.jsonc`.
 
-GitHub Pages больше не входит в deployment flow. Production frontend обслуживается только Cloudflare Workers Static Assets.
+GitHub Pages больше не входит в deployment flow.
 
-## Backend
+## API gateway
 
-На первом этапе backend не меняется.
+Browser вызывает только same-origin endpoint:
 
 ```text
-Telegram Mini App
-  -> Supabase Edge Function staff-cost-miniapp
-  -> runtime_api
-  -> staff_cost
+POST /api/staff-cost
 ```
 
-Telegram `initData` отправляется в Supabase Edge Function `staff-cost-miniapp`.
-Сервер валидирует Telegram signature и разрешённого пользователя.
+Worker передаёт JSON body в существующую Supabase Edge Function без изменения API contract.
 
-Frontend не содержит Telegram bot token, Supabase service role key или других server-side secrets.
+Worker не валидирует Telegram `initData`.
+Telegram signature и allowlist пользователя проверяет `staff-cost-miniapp`.
+
+Frontend не содержит прямой URL Supabase Edge Function, Telegram bot token, Supabase service role key или другие server-side secrets.
+
+На этом этапе Worker не использует KV, R2 или D1 и не кэширует ответы Staff Cost.
 
 ## Repository workflow
 

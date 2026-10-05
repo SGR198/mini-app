@@ -1,10 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "database-miniapp",
+  "main": "./src/index.js",
   "compatibility_date": "2026-10-05",
   "workers_dev": true,
   "assets": {
-    "directory": "./public"
+    "directory": "./public",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  },
+  "vars": {
+    "SUPABASE_STAFF_COST_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp",
+    "SUPABASE_ALLOWED_ORIGIN": "https://database-miniapp.loftauto-data.workers.dev"
   },
   "observability": {
     "enabled": true
