@@ -19,7 +19,7 @@ Frontend находится в `public/`.
 
 Cloudflare configuration: `wrangler.jsonc`.
 
-До завершения migration issue #4 старый GitHub Pages deployment сохраняется как rollback.
+GitHub Pages больше не входит в deployment flow. Production frontend обслуживается только Cloudflare Workers Static Assets.
 
 ## Backend
 
