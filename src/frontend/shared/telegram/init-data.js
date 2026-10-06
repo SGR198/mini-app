@@ -1,3 +1,7 @@
 export function getTelegramInitData() {
-  return globalThis?.Telegram?.WebApp?.initData || "";
+  const webApp=globalThis?.Telegram?.WebApp;
+  if (!webApp) return "";
+  webApp.ready?.();
+  webApp.expand?.();
+  return webApp.initData || "";
 }
