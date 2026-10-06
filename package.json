@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build:frontend": "node scripts/build-frontend.mjs",
-    "build": "npm run build:frontend && wrangler deploy --dry-run",
-    "deploy": "npm run build:frontend && wrangler deploy"
+    "build": "npm run build:frontend && npm run check:staff-cost-parity && wrangler deploy --dry-run",
+    "deploy": "npm run build:frontend && npm run check:staff-cost-parity && wrangler deploy",
+    "check:staff-cost-parity": "node scripts/check-staff-cost-parity.mjs"
   },
   "devDependencies": {
     "wrangler": "4.147.0"
