@@ -25,13 +25,21 @@ let accrualModelKey=Array.isArray(initialPayload?.scope?.period_ids)
   ? initialPayload.scope.period_ids.map(Number).sort((a,b)=>a-b).join(',')
   : '';
 let paymentModel=null;
+let paymentModelKey='';
 let statementModel=null;
+let statementModelKey='';
 let statementEmployeeModel=null;
+let statementEmployeeModelKey='';
 let statementMonthModel=null;
+let statementMonthModelKey='';
 let summaryModel=null;
+let summaryModelKey='';
 let bodyAccrualModel=null;
+let bodyAccrualModelKey='';
 let bodyCatalogModel=null;
+let bodyCatalogModelKey='';
 let billingModel=null;
+let billingModelKey='';
 
 let accrualEmployees=[];
 let payments=[];
@@ -453,9 +461,12 @@ async function loadRepairPositions(){
   }
 }
 async function loadBodyAccruals(ids){
+  const key=scopeKey(ids);
+  if(bodyAccrualModel&&bodyAccrualModelKey===key)return bodyAccrualModel;
   const payload=await staffCostApi.bodyRepairAccruals(ids);
   touchGenerated(payload);
   bodyAccrualModel=payload;
+  bodyAccrualModelKey=key;
   bodyRepairWorkOrders=payload.work_orders||[];
   accrualEmployees=payload.employees||[];
   for(const employee of accrualEmployees){
@@ -465,23 +476,31 @@ async function loadBodyAccruals(ids){
 }
 async function loadBodyWorkOrders(ids){
   await loadBodyAccruals(ids);
+  const key=scopeKey(ids);
+  if(bodyCatalogModel&&bodyCatalogModelKey===key)return bodyCatalogModel;
   const payload=await staffCostApi.bodyRepairWorkOrders(ids,{limit:100});
   touchGenerated(payload);
   bodyCatalogModel=payload;
+  bodyCatalogModelKey=key;
   bodyRepairWorkOrderCatalog=payload.items||[];
   return payload;
 }
 async function loadBillingPayments(){
   const {dateFrom,dateTo}=paymentDateRange();
+  const key=dateFrom+':'+dateTo;
+  if(billingModel&&billingModelKey===key)return billingModel;
   const payload=await staffCostApi.billingPayments(dateFrom,dateTo,{limit:100});
   touchGenerated(payload);
   billingModel=payload;
+  billingModelKey=key;
   billingPayments=payload.items||[];
   return payload;
 }
 async function loadStaffPayments(){
   const {dateFrom,dateTo}=paymentDateRange();
   const employeeId=state.view==='payment_employee'?Number(state.employee_id):null;
+  const key=[dateFrom,dateTo,employeeId??'',state.payment_status_filter||'',state.payment_type_filter||''].join(':');
+  if(paymentModel&&paymentModelKey===key)return paymentModel;
   const payload=await staffCostApi.payments(dateFrom,dateTo,{
     staffMemberId:employeeId,
     status:state.payment_status_filter,
@@ -490,35 +509,65 @@ async function loadStaffPayments(){
   });
   touchGenerated(payload);
   paymentModel=payload;
+  paymentModelKey=key;
   payments=payload.items||[];
   return payload;
 }
 async function loadStatementList(ids){
+  const key=scopeKey(ids);
+  if(statementModel&&statementModelKey===key)return statementModel;
   const payload=await staffCostApi.statement(ids,{limit:100,offset:0});
   touchGenerated(payload);
   statementModel=payload;
+  statementModelKey=key;
   return payload;
 }
 async function loadStatementEmployee(ids){
+  const key=Number(state.employee_id)+':'+scopeKey(ids);
+  if(statementEmployeeModel&&statementEmployeeModelKey===key){
+    balances=statementEmployeeModel.periods||[];
+    payments=statementEmployeeModel.payments||[];
+    return statementEmployeeModel;
+  }
   const payload=await staffCostApi.statementEmployee(state.employee_id,ids);
   touchGenerated(payload);
   statementEmployeeModel=payload;
+  statementEmployeeModelKey=key;
   balances=payload.periods||[];
   payments=payload.payments||[];
   return payload;
 }
 async function loadStatementMonth(){
+  const key=Number(state.employee_id)+':'+Number(state.reporting_period_id);
+  if(statementMonthModel&&statementMonthModelKey===key){
+    balances=statementMonthModel.balance?[statementMonthModel.balance]:[];
+    payments=statementMonthModel.payments||[];
+    return statementMonthModel;
+  }
   const payload=await staffCostApi.statementMonth(state.employee_id,state.reporting_period_id);
   touchGenerated(payload);
   statementMonthModel=payload;
+  statementMonthModelKey=key;
   balances=payload.balance?[payload.balance]:[];
   payments=payload.payments||[];
   return payload;
 }
 async function loadSummary(ids){
+  const key=scopeKey(ids);
+  if(summaryModel&&summaryModelKey===key){
+    summaries=summaryModel.items||[];
+    return summaryModel;
+  }
+  if(!ids.length){
+    summaryModel={items:[],generated_at:data.meta.generated_at};
+    summaryModelKey=key;
+    summaries=[];
+    return summaryModel;
+  }
   const payload=await staffCostApi.summary(ids);
   touchGenerated(payload);
   summaryModel=payload;
+  summaryModelKey=key;
   summaries=payload.items||[];
   return payload;
 }
