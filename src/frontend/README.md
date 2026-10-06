@@ -1,27 +1,23 @@
-# Frontend v2 source
+# Frontend source
 
-This tree contains the new Mini App frontend source.
-
-It is intentionally not wired to the current production renderer yet.
-The legacy `public/index.html` remains production until the Staff Cost cutover issue.
+Canonical Mini App frontend source.
 
 ```text
 apps/
-  -> deployable Mini Apps and app-level route composition
+  -> deployable Mini Apps and app-level routing
 
 pages/
-  -> reusable routable screens/features
+  -> reusable pages/features
 
 shared/
-  -> reusable API and Telegram client helpers
+  -> reusable API, Telegram and UI helpers
+
+styles/
+  -> source styles
 ```
 
-Page internals may use:
+Staff Cost is implemented as a native page under `pages/staff-cost/`.
 
-```text
-page
-  -> views
-  -> components
-```
+Its runtime data comes from `/api/miniapp` and native `miniapp.staff_cost_*` backend contracts.
 
-If a sub-screen becomes a real URL/deep-link, model it as a route/page rather than hiding routing inside a view.
+`public/` is generated build output. Do not treat generated assets as the canonical editing surface.

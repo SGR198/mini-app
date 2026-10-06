@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wrangler deploy --dry-run",
-    "deploy": "wrangler deploy"
+    "build:frontend": "node scripts/build-frontend.mjs",
+    "build": "npm run build:frontend && wrangler deploy --dry-run",
+    "deploy": "npm run build:frontend && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "4.147.0"

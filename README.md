@@ -2,101 +2,103 @@
 
 Telegram Mini App monorepo for Loft Auto internal interfaces.
 
-## Current production
+## Production runtime
 
-The current production frontend still runs the legacy Staff Cost Dashboard №2 renderer.
-
-```text
-Telegram
-  -> Cloudflare Worker database-miniapp
-  -> Workers Static Assets: public/index.html
-  -> POST /api/staff-cost
-  -> Supabase Edge staff-cost-miniapp
-  -> legacy dashboard payload/runtime
-```
-
-This path remains operational until the dedicated Staff Cost page cutover.
-
-## Mini App v2 foundation
-
-Issue #16 introduces a separate target runtime.
+Staff Cost is the first native Mini App v2 page.
 
 ```text
 Telegram Mini App
-  -> Cloudflare Worker
+  -> Cloudflare Worker database-miniapp
+  -> Workers Static Assets
   -> POST /api/miniapp
   -> Supabase Edge miniapp-api
   -> direct PostgreSQL transaction
-  -> SET LOCAL ROLE miniapp_executor
-  -> miniapp.*
-  -> owning domain schemas
+  -> miniapp.staff_cost_*
+  -> staff_cost / related domain facts
 ```
 
-The browser never receives database credentials and never selects PostgreSQL schema/function/table identifiers.
+The frontend no longer reads `dashboard.payload_staff_cost`.
+Business calculations remain in Supabase domain schemas.
 
-Telegram `initData` is verified server-side in Supabase Edge.
-The verified external subject resolves to the existing `access.identity` model in `SGR198/database`.
-
-## Source structure
-
-New frontend source is developed under:
+## Staff Cost source
 
 ```text
 src/frontend/
-├─ apps/
-│  └─ owner/
-├─ pages/
-│  ├─ home/
-│  └─ staff-cost/
-└─ shared/
-   ├─ api/
-   └─ telegram/
+├─ apps/owner/
+├─ pages/staff-cost/
+│  ├─ page.js
+│  ├─ api.js
+│  ├─ views/
+│  └─ components/
+├─ shared/
+└─ styles/
 ```
 
-Conceptual hierarchy:
+The production `public/` directory is generated from `src/frontend/` by:
 
 ```text
-APP
-  -> PAGE
-      -> VIEW
-          -> COMPONENT
+npm run build:frontend
 ```
 
-A route belongs to an app-page binding.
-Business calculations remain in Supabase domain schemas.
+Cloudflare build/deploy runs the frontend build before Wrangler.
+
+## Data loading
+
+Staff Cost uses view/use-case API contracts.
+
+```text
+bootstrap              -> metadata only
+accruals               -> paginated
+employee detail        -> on demand
+payments               -> paginated
+statement              -> paginated
+statement employee     -> on demand
+summary                -> selected periods
+body repair drilldown  -> on demand
+```
+
+List continuation uses IntersectionObserver prefetch near the end of the current list.
+
+## Access
+
+Telegram `initData` is verified by Supabase Edge.
+
+```text
+initData
+  -> verified Telegram subject
+  -> miniapp.identity_subject
+  -> access.identity
+  -> trusted Mini App context
+```
+
+Cloudflare does not own authorization or business logic.
 
 ## Rendering
 
-Renderer source belongs to this repository.
+Frontend/renderer source belongs to this repository.
 
-Target standalone rendering:
+Future standalone rendering remains compatible with ADR-0028:
 
 ```text
-GitHub source
+source
   -> Cloudflare build
-  -> private immutable R2 renderer artifact
-  -> standalone page render
+  -> private R2 renderer artifact
+  -> standalone render
+  -> optional delivery
 ```
 
-R2 is not the source of truth for frontend code, business data or permissions.
+R2 is not an authorization boundary.
 
-Document rendering remains a separate backend runtime.
-Legacy Dashboard rendering remains separate until its eventual removal.
+Document rendering remains separate.
+Legacy Dashboard rendering remains separate until its cleanup issue removes the old Staff Cost consumer.
 
-## API gateway
+## Legacy compatibility
 
-Two same-origin endpoints coexist during migration:
+During cutover the Worker still exposes `/api/staff-cost` and the old Supabase `staff-cost-miniapp` Edge Function remains deployed.
 
-```text
-POST /api/staff-cost
-  -> legacy Staff Cost runtime
+The native page uses only `/api/miniapp`.
 
-POST /api/miniapp
-  -> new Mini App v2 runtime
-```
-
-Cloudflare only proxies HTTP.
-Authentication, access and business data remain in Supabase.
+The old route/runtime is removed only in the follow-up cleanup issue after production verification.
 
 ## Repository workflow
 
