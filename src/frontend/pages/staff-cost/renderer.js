@@ -1132,6 +1132,61 @@ function renderBalanceMonth(){
 function renderSummary(){const ids=new Set(selectedIds()),rows=summaries.filter(r=>ids.has(Number(r.reporting_period_id))).sort((a,b)=>(a.reporting_year-b.reporting_year)||(a.reporting_month-b.reporting_month)),latest=rows.at(-1),flowAcc=rows.reduce((s,r)=>s+num(r.accrual_total),0),flowPay=rows.reduce((s,r)=>s+num(r.payment_total),0);$('content').innerHTML=hero('Общий баланс к выплате',`<span class="${signClass(latest?.balance_to_pay)}">${rub(latest?.balance_to_pay)}</span>`,rows.length?periodLabel(latest.reporting_period_id):'—','последний выбранный месяц',[['Начислено',rub(flowAcc)],['Выплачено',rub(flowPay)],['Месяцев',String(rows.length)]])+`<div class="section-title"><h2>По месяцам</h2><span>канонический summary</span></div>`+(rows.length?`<div class="list">${rows.map(r=>`<button class="summary-card item" data-summary="${r.reporting_period_id}"><div class="summary-head"><div class="summary-month">${periodLabel(r.reporting_period_id,true)}</div><div class="summary-balance ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="summary-grid"><div class="summary-cell"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="summary-cell"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="summary-cell"><span>Входящий</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="summary-cell"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div></button>`).join('')}</div>`:empty());document.querySelectorAll('[data-summary]').forEach(b=>b.onclick=()=>push({...state,view:'summary_month',reporting_period_id:Number(b.dataset.summary)}))}
 function renderSummaryMonth(){const r=summaries.find(x=>Number(x.reporting_period_id)===Number(state.reporting_period_id));if(!r){$('content').innerHTML=empty();return}$('content').innerHTML=`<div class="detail-head"><div><h1>${periodLabel(r.reporting_period_id,true)}</h1><p>Общий баланс Staff Cost</p></div><div class="detail-total ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="detail-grid"><div class="detail-box"><span>Входящий баланс</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="detail-box"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="detail-box"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="detail-box"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div><div class="source-row"><div class="source-name">Итоговый баланс</div><div class="source-val ${signClass(r.closing_balance)}">${rub(r.closing_balance)}</div></div>`}
 function renderBody(){if(state.section==='accruals'){if(state.view==='body_repair_accruals')return renderBodyRepairAccruals();if(state.view==='body_repair_work_orders')return renderBodyRepairWorkOrders();if(state.view==='billing_payments')return renderBillingPayments();if(state.view==='employee')return renderAccrualEmployee();if(state.view==='source')return renderAccrualSource();if(state.view==='repair_positions')return renderAccrualRepairPositions();return renderAccruals()}if(state.section==='payments'){if(state.view==='payment_employee')return renderPaymentEmployee();if(state.view==='payment')return renderPaymentDetail();return renderPayments()}if(state.section==='balance'){if(state.view==='employee_balance')return renderBalanceEmployee();if(state.view==='balance_month')return renderBalanceMonth();return renderBalance()}if(state.section==='summary'){if(state.view==='summary_month')return renderSummaryMonth();return renderSummary()}state.section='accruals';state.view='list';renderAccruals()}
-function render(){renderChrome();renderBody();renderFilter()}
-window.addEventListener('popstate',e=>{if(e.state?.staffCost){state={...initial,...e.state};render();if(accrualListScroll&&state.section==='accruals'&&state.view==='list'&&state.depth===accrualListScroll.depth){const saved=accrualListScroll;requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='list'&&state.depth===saved.depth){setAccrualScroll(saved.top,saved.contentTop);if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;accrualListScroll=null}})}else if(accrualListScroll&&state.section==='accruals'&&state.view==='employee'){setAccrualScroll(0);requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='employee')setAccrualScroll(0)})}if(balanceListScroll&&state.section==='balance'&&state.view==='list'&&state.depth===balanceListScroll.depth){const saved=balanceListScroll;requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='list'&&state.depth===saved.depth){setAccrualScroll(saved.top,saved.contentTop);if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;balanceListScroll=null}})}else if(balanceListScroll&&state.section==='balance'&&state.view==='employee_balance'){setAccrualScroll(0);requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='employee_balance')setAccrualScroll(0)})}}});history.replaceState({staffCost:true,...state},'');window.StaffCostDashboard={getState:()=>({...state}),render,back:()=>history.back()};document.body.classList.remove('app-boot');render();
+let renderEpoch=0;
+async function render(){
+  const token=++renderEpoch;
+  renderChrome();
+  renderFilter();
+  try{
+    await ensureViewData();
+  }catch(error){
+    console.error('staff_cost_view_load_failed',{
+      section:state.section,
+      view:state.view,
+      message:error instanceof Error?error.message:String(error)
+    });
+    if(token===renderEpoch)$('content').innerHTML=empty('Не удалось загрузить данные');
+    return;
+  }
+  if(token!==renderEpoch)return;
+  renderChrome();
+  renderBody();
+  renderFilter();
+  queueMicrotask(prefetchPrimaryViews);
+}
+window.addEventListener('popstate',async e=>{
+  if(!e.state?.staffCost)return;
+  state={...initial,...e.state};
+  await render();
+  if(accrualListScroll&&state.section==='accruals'&&state.view==='list'&&state.depth===accrualListScroll.depth){
+    const saved=accrualListScroll;
+    requestAnimationFrame(()=>{
+      if(state.section==='accruals'&&state.view==='list'&&state.depth===saved.depth){
+        setAccrualScroll(saved.top,saved.contentTop);
+        if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;
+        accrualListScroll=null;
+      }
+    });
+  }else if(accrualListScroll&&state.section==='accruals'&&state.view==='employee'){
+    setAccrualScroll(0);
+    requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='employee')setAccrualScroll(0)});
+  }
+  if(balanceListScroll&&state.section==='balance'&&state.view==='list'&&state.depth===balanceListScroll.depth){
+    const saved=balanceListScroll;
+    requestAnimationFrame(()=>{
+      if(state.section==='balance'&&state.view==='list'&&state.depth===saved.depth){
+        setAccrualScroll(saved.top,saved.contentTop);
+        if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;
+        balanceListScroll=null;
+      }
+    });
+  }else if(balanceListScroll&&state.section==='balance'&&state.view==='employee_balance'){
+    setAccrualScroll(0);
+    requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='employee_balance')setAccrualScroll(0)});
+  }
+});
+history.replaceState({staffCost:true,...state},'');
+window.StaffCostDashboard={getState:()=>({...state}),render,back:()=>history.back()};
+await render();
+document.body.classList.remove('app-boot');
 }
