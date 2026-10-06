@@ -673,15 +673,8 @@ function bodyRepairAccruedMap(){
   return map;
 }
 function bodyRepairVisibleWorkOrderCount(){
-  const ids=new Set(accrualIds()),visible=new Set();
-  bodyRepairWorkOrderCatalog.forEach(w=>{
-    const id=Number(w.work_order_id);
-    if(!Number.isFinite(id))return;
-    const memberships=Array.isArray(w.worker_ktu_periods)?w.worker_ktu_periods:[];
-    if(w.has_worker_ktu===false||memberships.length===0){visible.add(id);return}
-    if(memberships.some(p=>ids.has(Number(p.reporting_period_id))))visible.add(id);
-  });
-  return visible.size;
+  if(state.view==='body_repair_work_orders'&&bodyCatalogModel)return num(bodyCatalogModel?.summary?.total_count);
+  return num(bodyAccrualModel?.summary?.work_order_count);
 }
 function bodyRepairWorkOrderGroups(){
   const ids=new Set(accrualIds()),noKtu=[],byPeriod=new Map();
@@ -798,8 +791,7 @@ function bodyRepairGroupHeading(title,count,subtitle=''){
 function openBillingPayments(){push({...state,view:'billing_payments'});setAccrualScroll(0)}
 function clientPaymentMonthKey(value){const m=String(value||'').match(/^(\d{4})-(\d{2})/);return m?monthKey(Number(m[1]),Number(m[2])):null}
 function billingPaymentRows(){
-  return billingPayments.filter(p=>{const k=clientPaymentMonthKey(p.payment_date);return k!==null&&k>=state.rangeStart&&k<=state.rangeEnd})
-    .slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||num(b.payment_id)-num(a.payment_id));
+  return billingPayments.slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||num(b.payment_id)-num(a.payment_id));
 }
 function billingPaymentRow(p){
   const allocations=Array.isArray(p.allocations)?p.allocations:[];
@@ -844,7 +836,7 @@ function renderBodyRepairWorkOrders(){
   const accruedMap=bodyRepairAccruedMap();
   const uniqueCount=bodyRepairVisibleWorkOrderCount();
   const total=num(currentAccrualAggregate().body_accrual_total);
-  const paymentRows=billingPaymentRows();
+  const clientPaymentCount=num(bodyCatalogModel?.summary?.billing_payment_count);
   const noKtuCards=groups.noKtu.map(w=>bodyRepairCatalogCard(w,null,accruedMap)).join('');
   const noKtuSection='<section class="body-order-group no-ktu">'+bodyRepairGroupHeading('Без КТУ',groups.noKtu.length,'КТУ кузовщиков не назначен')+(noKtuCards?'<div class="body-order-list">'+noKtuCards+'</div>':'<div class="body-group-empty">Нет заказ-нарядов без КТУ</div>')+'</section>';
   const monthSections=groups.monthGroups.map(group=>{
@@ -853,7 +845,7 @@ function renderBodyRepairWorkOrders(){
     return '<section class="body-order-group">'+bodyRepairGroupHeading(title,group.items.length)+'<div class="body-order-list">'+cards+'</div></section>';
   }).join('');
   $('content').innerHTML=bodyRepairHeader('Кузовные заказ-наряды')
-    +'<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по кузовному</span><strong>'+rub(total)+'</strong></div><div class="body-summary-card"><span>Заказ-наряды</span><strong>'+uniqueCount+'</strong></div><button type="button" class="body-summary-card link client-payments" data-body-client-payments><span>Оплаты клиентов · по дате оплаты</span><strong>'+paymentRows.length+'</strong>'+bodyWorkOrderChevron()+'</button></div>'
+    +'<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по кузовному</span><strong>'+rub(total)+'</strong></div><div class="body-summary-card"><span>Заказ-наряды</span><strong>'+uniqueCount+'</strong></div><button type="button" class="body-summary-card link client-payments" data-body-client-payments><span>Оплаты клиентов · по дате оплаты</span><strong>'+clientPaymentCount+'</strong>'+bodyWorkOrderChevron()+'</button></div>'
     +'<div class="body-register-heading"><h2>Заказ-наряды</h2><span>'+esc(workOrderCountLabel(uniqueCount))+'</span></div>'
     +noKtuSection+monthSections
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
@@ -1044,23 +1036,23 @@ function renderPaymentDetail(){const p=payments.find(x=>Number(x.id)===Number(st
 function balanceSelection(){
   const selected=periods.filter(p=>monthKey(p.year,p.month)>=state.rangeStart&&monthKey(p.year,p.month)<=state.rangeEnd)
     .sort((a,b)=>(a.year-b.year)||(a.month-b.month));
-  const latest=selected.at(-1),ids=new Set(selected.map(p=>Number(p.id)));
-  const rows=balances.filter(r=>ids.has(Number(r.reporting_period_id)));
-  const flows=new Map();
-  rows.forEach(r=>{
-    const id=Number(r.staff_member_id),x=flows.get(id)||{accrual:0,payment:0};
-    x.accrual+=num(r.accrual_total);
-    x.payment+=num(r.payment_total);
-    flows.set(id,x);
-  });
-  const lastRows=latest?balances.filter(r=>Number(r.reporting_period_id)===Number(latest.id)):[];
-  const records=lastRows.map(r=>({...r,flow:flows.get(Number(r.staff_member_id))||{accrual:0,payment:0}}))
-    .filter(r=>r.flow.accrual!==0||r.flow.payment!==0);
-  const rank={to_pay:0,settled:1,overpaid:2};
-  records.sort((a,b)=>(rank[a.settlement_state]??3)-(rank[b.settlement_state]??3)
-    ||num(b.closing_balance)-num(a.closing_balance)
-    ||String(a.fio_full||'').localeCompare(String(b.fio_full||''),'ru'));
-  return {selected,latest,rows,records,summary:latest?summaries.find(r=>Number(r.reporting_period_id)===Number(latest.id)):null,flows};
+  const latest=selected.at(-1);
+  const records=(statementModel?.items||[]).map(r=>({
+    ...r,
+    flow:{accrual:num(r.accrual_total),payment:num(r.payment_total)}
+  }));
+  const flows=new Map(records.map(r=>[
+    Number(r.staff_member_id),
+    {accrual:num(r.accrual_total),payment:num(r.payment_total)}
+  ]));
+  return {
+    selected,
+    latest,
+    rows:balances,
+    records,
+    summary:statementModel?.summary||null,
+    flows
+  };
 }
 function balanceStateClass(v){return ['to_pay','overpaid','settled'].includes(v)?v:'settled'}
 function balanceBindFilter(){
@@ -1079,8 +1071,8 @@ function openBalanceEmployee(id){
 function renderBalance(){
   if(Number(data.version)<8){$('content').innerHTML=empty('Для ведомости требуется обновлённый payload');return}
   const model=balanceSelection();
-  const paid=model.selected.reduce((sum,p)=>sum+num(summaries.find(r=>Number(r.reporting_period_id)===Number(p.id))?.payment_total),0);
-  const paymentCount=model.rows.reduce((sum,r)=>sum+num(r.payment_count),0);
+  const paid=num(statementModel?.flow?.payment_total);
+  const paymentCount=num(statementModel?.flow?.payment_count);
   const payable=model.summary?.payable_total, payableCount=model.summary?.payable_employee_count;
   const rows=model.records.map(r=>{
     const id=Number(r.staff_member_id),name=shortName(staffById.get(id)?.fio_full||r.fio_full);
@@ -1088,7 +1080,7 @@ function renderBalance(){
   }).join('');
   $('content').innerHTML='<div class="balance-summary-grid"><div class="balance-summary-card"><div class="balance-summary-head"><span>Выплачено</span><span class="balance-summary-badge">'+paymentCount+'</span></div><div class="balance-summary-value">'+rub(paid)+'</div></div>'
     +'<div class="balance-summary-card payable"><div class="balance-summary-head"><span>К выплате</span><span class="balance-summary-badge">'+(payableCount??0)+'</span></div><div class="balance-summary-value">'+(payable==null?'—':rub(payable))+'</div></div></div>'
-    +'<div class="balance-register-sticky"><div class="balance-register-heading"><h2>Ведомость</h2><span class="balance-record-count">'+esc(recordCountLabel(model.records.length))+'</span>'+rangeChip()+'</div>'
+    +'<div class="balance-register-sticky"><div class="balance-register-heading"><h2>Ведомость</h2><span class="balance-record-count">'+esc(recordCountLabel(statementModel?.page?.total_count??model.records.length))+'</span>'+rangeChip()+'</div>'
     +'<div class="balance-register-grid balance-register-head"><span>Начислено, руб.</span><span>Выплачено, руб.</span><span>К выплате, руб.</span><span></span></div></div>'
     +(model.records.length?'<div class="balance-register">'+rows+'</div>':empty('Нет данных за выбранный период'))
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
