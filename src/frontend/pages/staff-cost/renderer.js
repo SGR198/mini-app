@@ -78,65 +78,34 @@ const monthOf=k=>k%12+1;
 function accrualIds(){return periods.filter(p=>monthKey(p.year,p.month)>=state.rangeStart&&monthKey(p.year,p.month)<=state.rangeEnd).map(p=>Number(p.id))}
 function allAccrualIds(){return periods.map(p=>Number(p.id))}
 function additiveSum(rows,field){return rows.reduce((s,r)=>s+num(r?.[field]),0)}
-function accrualAggregate(ids){
-  const idSet=new Set((ids||[]).map(Number));
-  const rows=accruals.filter(r=>idSet.has(Number(r.reporting_period_id)));
-  const byEmp=new Map();
-  rows.forEach(r=>{
-    const id=Number(r.staff_member_id),x=byEmp.get(id)||{staff_member_id:id,fio_full:r.fio_full,calculated_accrual_total:0,accrual_adjustment_total:0,accrual_total:0};
-    x.fio_full=x.fio_full||r.fio_full;
-    x.calculated_accrual_total+=num(r.calculated_accrual_total);
-    x.accrual_adjustment_total+=num(r.accrual_adjustment_total);
-    x.accrual_total+=num(r.accrual_total);
-    byEmp.set(id,x);
-  });
-  return {
-    calculated_accrual_total:additiveSum(rows,'calculated_accrual_total'),
-    accrual_adjustment_total:additiveSum(rows,'accrual_adjustment_total'),
-    accrual_total:additiveSum(rows,'accrual_total'),
-    body_accrual_total:additiveSum(rows,'body_accrual_total'),
-    service_advisor_accrual_total:additiveSum(rows,'service_advisor_accrual_total'),
-    mechanical_accrual_total:additiveSum(rows,'mechanical_accrual_total'),
-    employee_count:byEmp.size,
-    employees:[...byEmp.values()].sort((a,b)=>num(b.accrual_total)-num(a.accrual_total)||String(a.fio_full||'').localeCompare(String(b.fio_full||''),'ru'))
-  };
+function scopeKey(ids){return [...new Set((ids||[]).map(Number))].sort((a,b)=>a-b).join(',')}
+function touchGenerated(payload){if(payload?.generated_at)data.meta.generated_at=payload.generated_at}
+function currentAccrualAggregate(){
+  const summary=accrualModel?.summary||{};
+  return {...summary,employees:Array.isArray(accrualModel?.items)?accrualModel.items:[]};
 }
-function currentAccrualAggregate(){return accrualAggregate(accrualIds())}
 function employeeAccrualTotal(employeeId,ids){
+  const employee=accrualEmployeeById.get(Number(employeeId));
   const idSet=new Set((ids||[]).map(Number));
-  return additiveSum(accruals.filter(r=>Number(r.staff_member_id)===Number(employeeId)&&idSet.has(Number(r.reporting_period_id))),'accrual_total');
+  return (Array.isArray(employee?.periods)?employee.periods:[])
+    .filter(r=>idSet.has(Number(r.reporting_period_id)))
+    .reduce((sum,r)=>sum+num(r.accrual_total),0);
 }
 function paymentRowsBase(employeeId=null){
-  return payments.filter(p=>{
-    const [y,m]=String(p.payment_date||'').split('-').map(Number);
-    const k=monthKey(y,m);
-    return Number.isFinite(k)
-      && k>=state.rangeStart
-      && k<=state.rangeEnd
-      && (employeeId==null||Number(p.staff_member_id)===Number(employeeId));
-  });
+  return payments
+    .filter(p=>employeeId==null||Number(p.staff_member_id)===Number(employeeId))
+    .slice()
+    .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
 }
-function paymentRowsFiltered(employeeId=null){
-  return paymentRowsBase(employeeId).filter(p=>{
-    if(state.payment_status_filter&&p.status!==state.payment_status_filter)return false;
-    if(state.payment_type_filter){
-      const src=sourceById.get(Number(p.payment_source_id));
-      if(src?.code!==state.payment_type_filter)return false;
-    }
-    return true;
-  }).sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
-}
-function paymentSummary(employeeId=null){
-  const rows=paymentRowsBase(employeeId),paid=rows.filter(p=>p.status==='paid'),draft=rows.filter(p=>p.status==='draft');
-  return {
-    total_count:rows.length,
-    total_amount:additiveSum(rows,'amount'),
-    paid_count:paid.length,
-    paid_total:additiveSum(paid,'amount'),
-    draft_count:draft.length,
-    draft_total:additiveSum(draft,'amount')
-  };
-}
+function paymentRowsFiltered(employeeId=null){return paymentRowsBase(employeeId)}
+function paymentSummary(){return paymentModel?.summary||{
+  total_count:payments.length,
+  total_amount:additiveSum(payments,'amount'),
+  paid_count:payments.filter(p=>p.status==='paid').length,
+  paid_total:additiveSum(payments.filter(p=>p.status==='paid'),'amount'),
+  draft_count:payments.filter(p=>p.status==='draft').length,
+  draft_total:additiveSum(payments.filter(p=>p.status==='draft'),'amount')
+}}
 function paymentSourceLabel(code,name){if(code==='cash')return 'Нал';if(code==='bank')return 'Безнал';return name||code||''}
 function paymentTypeOptions(){
   return sources.map(s=>({code:s.code,label:paymentSourceLabel(s.code,s.name)}));
