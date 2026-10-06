@@ -91,16 +91,37 @@ for(const marker of rendererMarkers){
 for(const marker of cssMarkers){
   if(!css.includes(marker)) failures.push(`missing css marker: ${marker}`);
 }
-if(!api.includes('action:"staff_cost.snapshot"')){
-  failures.push("missing API action: staff_cost.snapshot");
+const requiredActions=[
+  "staff_cost.initial",
+  "staff_cost.accruals",
+  "staff_cost.employee",
+  "staff_cost.employee_source",
+  "staff_cost.repair_positions",
+  "staff_cost.body_repair_accruals",
+  "staff_cost.body_repair_work_orders",
+  "staff_cost.billing_payments",
+  "staff_cost.payments",
+  "staff_cost.statement",
+  "staff_cost.statement_employee",
+  "staff_cost.statement_month",
+  "staff_cost.summary"
+];
+for(const action of requiredActions){
+  if(!api.includes(`"${action}"`)) failures.push(`missing API action: ${action}`);
+}
+if(api.includes('"staff_cost.snapshot"')||api.includes('"staff_cost.ui_snapshot"')){
+  failures.push("legacy Staff Cost snapshot action remains in frontend API");
 }
 for(const marker of stateMarkers){
   if(!renderer.includes(marker)) failures.push(`missing state marker: ${marker}`);
 }
 
 if(!index.includes('body class="app-boot"')) failures.push("missing boot state");
-if(!renderer.includes("document.body.classList.remove('app-boot');render();")){
-  failures.push("missing boot reveal before first canonical render");
+if(!renderer.includes("await render();")||!renderer.includes("document.body.classList.remove('app-boot');")){
+  failures.push("missing async first render before boot reveal");
+}
+if(renderer.includes("loadStaffCostPageSnapshot")||renderer.includes("staff_cost.snapshot")){
+  failures.push("renderer still depends on Staff Cost snapshot");
 }
 
 if(renderer!==publicRenderer) failures.push("generated renderer differs from source");
@@ -120,6 +141,7 @@ console.log(JSON.stringify({
     functions:requiredFunctions.length,
     renderer_markers:rendererMarkers.length,
     css_markers:cssMarkers.length,
-    state_markers:stateMarkers.length
+    state_markers:stateMarkers.length,
+    bounded_actions:requiredActions.length
   }
 },null,2));
