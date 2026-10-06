@@ -1,48 +1,102 @@
 # mini-app
 
-Telegram Mini App для внутренних интерфейсов базы данных.
+Telegram Mini App monorepo for Loft Auto internal interfaces.
 
-Текущий production frontend показывает canonical Staff Cost Dashboard №2 (`staff_cost_accruals_v2`).
+## Current production
 
-## Runtime
+The current production frontend still runs the legacy Staff Cost Dashboard №2 renderer.
 
-Production runtime:
+```text
+Telegram
+  -> Cloudflare Worker database-miniapp
+  -> Workers Static Assets: public/index.html
+  -> POST /api/staff-cost
+  -> Supabase Edge staff-cost-miniapp
+  -> legacy dashboard payload/runtime
+```
+
+This path remains operational until the dedicated Staff Cost page cutover.
+
+## Mini App v2 foundation
+
+Issue #16 introduces a separate target runtime.
+
+```text
+Telegram Mini App
+  -> Cloudflare Worker
+  -> POST /api/miniapp
+  -> Supabase Edge miniapp-api
+  -> direct PostgreSQL transaction
+  -> SET LOCAL ROLE miniapp_executor
+  -> miniapp.*
+  -> owning domain schemas
+```
+
+The browser never receives database credentials and never selects PostgreSQL schema/function/table identifiers.
+
+Telegram `initData` is verified server-side in Supabase Edge.
+The verified external subject resolves to the existing `access.identity` model in `SGR198/database`.
+
+## Source structure
+
+New frontend source is developed under:
+
+```text
+src/frontend/
+├─ apps/
+│  └─ owner/
+├─ pages/
+│  ├─ home/
+│  └─ staff-cost/
+└─ shared/
+   ├─ api/
+   └─ telegram/
+```
+
+Conceptual hierarchy:
+
+```text
+APP
+  -> PAGE
+      -> VIEW
+          -> COMPONENT
+```
+
+A route belongs to an app-page binding.
+Business calculations remain in Supabase domain schemas.
+
+## Rendering
+
+Renderer source belongs to this repository.
+
+Target standalone rendering:
 
 ```text
 GitHub source
-  -> Cloudflare Workers Builds
-  -> Worker: database-miniapp
-       ├── Workers Static Assets
-       └── /api/staff-cost
-              -> Supabase Edge Function staff-cost-miniapp
-              -> runtime_api
-              -> staff_cost
+  -> Cloudflare build
+  -> private immutable R2 renderer artifact
+  -> standalone page render
 ```
 
-Canonical live renderer находится в `public/index.html`.
-Он синхронизирован с production Dashboard №2 renderer из `dashboard.registry.html_template`.
-Worker gateway находится в `src/index.js`.
-Cloudflare configuration: `wrangler.jsonc`.
+R2 is not the source of truth for frontend code, business data or permissions.
 
-GitHub Pages больше не входит в deployment flow.
+Document rendering remains a separate backend runtime.
+Legacy Dashboard rendering remains separate until its eventual removal.
 
 ## API gateway
 
-Browser вызывает только same-origin endpoint:
+Two same-origin endpoints coexist during migration:
 
 ```text
 POST /api/staff-cost
-  action = dashboard_payload
+  -> legacy Staff Cost runtime
+
+POST /api/miniapp
+  -> new Mini App v2 runtime
 ```
 
-Worker передаёт JSON body в существующую Supabase Edge Function. Edge Function после Telegram authentication возвращает canonical `dashboard.payload_staff_cost`.
-
-Worker не валидирует Telegram `initData`.
-Telegram signature и allowlist пользователя проверяет `staff-cost-miniapp`.
-
-Frontend не содержит прямой URL Supabase Edge Function, Telegram bot token, Supabase service role key или другие server-side secrets.
-
-На этом этапе Worker не использует KV, R2 или D1 и не кэширует ответы Staff Cost.
+Cloudflare only proxies HTTP.
+Authentication, access and business data remain in Supabase.
 
 ## Repository workflow
 
@@ -54,21 +108,6 @@ feature/*
   -> Cloudflare production deploy
 ```
 
-`main` — production source of truth.
-Cloudflare production deploy запускается только из `main`.
+See `AGENTS.md`.
 
-См. `AGENTS.md`.
-
-
-## Dashboard №2 renderer
-
-Production `public/index.html` — self-contained Dashboard №2 renderer.
-
-Он поддерживает два data-source режима:
-
-```text
-embedded snapshot -> {{DASHBOARD_DATA_JSON}}
-live Mini App     -> /api/staff-cost -> dashboard_payload
-```
-
-В рамках migration issue #12 UI, фильтры и бизнес-семантика не меняются.
+Canonical backend contract and ADR live in `SGR198/database`.
