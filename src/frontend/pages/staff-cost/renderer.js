@@ -1,9 +1,9 @@
-import { loadStaffCostUiSnapshot } from "./api.js";
+import { loadStaffCostPageSnapshot } from "./api.js";
 
 export async function mountStaffCostDashboard2(){
 'use strict';
 let data;
-try{data=await loadStaffCostUiSnapshot()}
+try{data=await loadStaffCostPageSnapshot()}
 catch(error){
   console.error('staff_cost_dashboard_load_failed',error);
   document.body.innerHTML='<main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:system-ui,sans-serif">Страница не найдена</main>';

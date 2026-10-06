@@ -39,6 +39,14 @@ async function proxyJsonPost(request, upstreamUrl, upstreamOrigin) {
     );
     headers.set("Cache-Control", "no-store");
 
+    const serverTiming = upstream.headers.get("Server-Timing");
+    if (serverTiming) headers.set("Server-Timing", serverTiming);
+
+    const appConfigCache = upstream.headers.get("X-Miniapp-App-Config-Cache");
+    if (appConfigCache) {
+      headers.set("X-Miniapp-App-Config-Cache", appConfigCache);
+    }
+
     return new Response(upstream.body, {
       status: upstream.status,
       headers,
