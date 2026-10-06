@@ -1,26 +1,49 @@
-import { loadStaffCostPageSnapshot } from "./api.js";
+import { staffCostApi } from "./api.js";
 
 export async function mountStaffCostDashboard2(){
 'use strict';
-let data;
-try{data=await loadStaffCostPageSnapshot()}
+let initialPayload;
+try{initialPayload=await staffCostApi.initial()}
 catch(error){
   console.error('staff_cost_dashboard_load_failed',error);
   document.body.innerHTML='<main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:system-ui,sans-serif">Страница не найдена</main>';
   return;
 }
-const periods=Array.isArray(data?.entities?.periods)?data.entities.periods:[];
-const staff=Array.isArray(data?.entities?.staff_members)?data.entities.staff_members:[];
-const sources=Array.isArray(data?.entities?.payment_sources)?data.entities.payment_sources:[];
-const accruals=Array.isArray(data?.facts?.accruals)?data.facts.accruals:[];
-const accrualHierarchy=data?.facts?.accrual_hierarchy&&typeof data.facts.accrual_hierarchy==='object'?data.facts.accrual_hierarchy:{};
-const accrualEmployees=Array.isArray(accrualHierarchy.employees)?accrualHierarchy.employees:[];
-const payments=Array.isArray(data?.facts?.payments)?data.facts.payments:[];
-const balances=Array.isArray(data?.facts?.balances)?data.facts.balances:[];
-const summaries=Array.isArray(data?.facts?.monthly_summary)?data.facts.monthly_summary:[];
-const bodyRepairWorkOrders=Array.isArray(data?.facts?.body_repair_work_orders)?data.facts.body_repair_work_orders:[];
-const bodyRepairWorkOrderCatalog=Array.isArray(data?.facts?.body_repair_work_order_catalog)?data.facts.body_repair_work_order_catalog:[];
-const billingPayments=Array.isArray(data?.facts?.billing_payments)?data.facts.billing_payments:[];
+
+const data={
+  version:Number(initialPayload?.payload_version)||13,
+  meta:{generated_at:initialPayload?.generated_at||null},
+  config:initialPayload?.config||{},
+  entities:initialPayload?.entities||{}
+};
+const periods=Array.isArray(data.entities.periods)?data.entities.periods:[];
+const staff=Array.isArray(data.entities.staff_members)?data.entities.staff_members:[];
+const sources=Array.isArray(data.entities.payment_sources)?data.entities.payment_sources:[];
+
+let accrualModel=initialPayload?.accruals||null;
+let accrualModelKey=Array.isArray(initialPayload?.scope?.period_ids)
+  ? initialPayload.scope.period_ids.map(Number).sort((a,b)=>a-b).join(',')
+  : '';
+let paymentModel=null;
+let statementModel=null;
+let statementEmployeeModel=null;
+let statementMonthModel=null;
+let summaryModel=null;
+let bodyAccrualModel=null;
+let bodyCatalogModel=null;
+let billingModel=null;
+
+let accrualEmployees=[];
+let payments=[];
+let balances=[];
+let summaries=[];
+let bodyRepairWorkOrders=[];
+let bodyRepairWorkOrderCatalog=[];
+let billingPayments=[];
+
+const employeeModels=new Map();
+const sourceModels=new Map();
+const repairModels=new Map();
 const sectionLabels={accruals:'Начисления',payments:'Выплаты',balance:'Ведомость',summary:'Общий баланс'};
 const monthNames=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const monthShort=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -38,13 +61,13 @@ const draftRecordCountLabel=v=>recordCountLabel(v);
 const staffById=new Map(staff.map(x=>[Number(x.id),x]));
 const sourceById=new Map(sources.map(x=>[Number(x.id),x]));
 const periodById=new Map(periods.map(x=>[Number(x.id),x]));
-const accrualEmployeeById=new Map(accrualEmployees.map(x=>[Number(x.staff_member_id),x]));
+const accrualEmployeeById=new Map();
 const latest=periods.slice().sort((a,b)=>(a.year-b.year)||(a.month-b.month)).at(-1);
-const baseYear=years.includes(Number(latest?.year))?Number(latest?.year):years[0];
-const baseMonth=Number(latest?.month)||1;
+const initialPeriod=periodById.get(Number(initialPayload?.config?.default_period_id))||latest;
+const baseYear=years.includes(Number(initialPeriod?.year))?Number(initialPeriod?.year):years[0];
+const baseMonth=Number(initialPeriod?.month)||1;
 const baseQuarter=Math.floor((baseMonth-1)/3)+1;
-const latestAccrual=accruals.slice().sort((a,b)=>(Number(a.reporting_year)-Number(b.reporting_year))||(Number(a.reporting_month)-Number(b.reporting_month))).at(-1);
-const accrualMonthKey=latestAccrual?Number(latestAccrual.reporting_year)*12+Number(latestAccrual.reporting_month)-1:baseYear*12+baseMonth-1;
+const accrualMonthKey=baseYear*12+baseMonth-1;
 const initial={section:'accruals',year:baseYear,quarter:baseQuarter,selected_period_ids:null,rangeStart:accrualMonthKey,rangeEnd:accrualMonthKey,view:'list',employee_id:null,employeeAllPeriods:false,collapsed_period_ids:[],collapsed_body_employee_ids:[],reporting_period_id:null,source_code:null,source_item_id:null,payment_id:null,payment_status_filter:null,payment_type_filter:null,depth:0};
 let state=history.state?.staffCost?{...initial,...history.state}:initial;
 const $=id=>document.getElementById(id);
