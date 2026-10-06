@@ -1,8 +1,6 @@
-import { homePage } from "../../pages/home/page.js";
+import { staffCostPage } from "../../pages/staff-cost/page.js";
 
-export const ownerRoutes = [
-  {
-    path: "/",
-    page: homePage,
-  },
+export const ownerRoutes=[
+  {path:"/",page:staffCostPage},
+  {path:"/staff-cost",page:staffCostPage}
 ];
