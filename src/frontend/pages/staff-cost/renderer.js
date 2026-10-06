@@ -643,6 +643,103 @@ function prefetchPrimaryViews(){
     staffCostApi.summary(selectedIds())
   ]);
 }
+let continuationObserver=null;
+let continuationBusy=false;
+function mergeUniqueRows(current,next,key){
+  const map=new Map((current||[]).map(row=>[String(row?.[key]),row]));
+  for(const row of next||[])map.set(String(row?.[key]),row);
+  return [...map.values()];
+}
+function continuationStateKey(){
+  return [
+    state.section,state.view,state.employee_id||'',state.rangeStart,state.rangeEnd,
+    state.payment_status_filter||'',state.payment_type_filter||'',scopeKey(periodIdsForRange())
+  ].join('|');
+}
+function installCurrentContinuation(){
+  continuationObserver?.disconnect();
+  continuationObserver=null;
+  if(continuationBusy)return;
+
+  let loader=null;
+
+  if(state.section==='payments'&&(state.view==='list'||state.view==='payment_employee')&&paymentModel?.page?.has_more&&paymentModel?.page?.next_cursor){
+    loader=async()=>{
+      const {dateFrom,dateTo}=paymentDateRange();
+      const next=await staffCostApi.payments(dateFrom,dateTo,{
+        staffMemberId:state.view==='payment_employee'?Number(state.employee_id):null,
+        status:state.payment_status_filter,
+        sourceCode:state.payment_type_filter,
+        limit:100,
+        cursor:paymentModel.page.next_cursor
+      });
+      payments=mergeUniqueRows(payments,next.items,'id')
+        .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
+      paymentModel={...paymentModel,items:payments,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='accruals'&&state.view==='body_repair_work_orders'&&bodyCatalogModel?.page?.has_more&&bodyCatalogModel?.page?.next_cursor){
+    loader=async()=>{
+      const next=await staffCostApi.bodyRepairWorkOrders(periodIdsForRange(),{
+        limit:100,
+        cursor:bodyCatalogModel.page.next_cursor
+      });
+      bodyRepairWorkOrderCatalog=mergeUniqueRows(bodyRepairWorkOrderCatalog,next.items,'work_order_id')
+        .sort((a,b)=>String(b.work_order_date||'').localeCompare(String(a.work_order_date||''))||Number(b.work_order_id)-Number(a.work_order_id));
+      bodyCatalogModel={...bodyCatalogModel,items:bodyRepairWorkOrderCatalog,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='accruals'&&state.view==='billing_payments'&&billingModel?.page?.has_more&&billingModel?.page?.next_cursor){
+    loader=async()=>{
+      const {dateFrom,dateTo}=paymentDateRange();
+      const next=await staffCostApi.billingPayments(dateFrom,dateTo,{
+        limit:100,
+        cursor:billingModel.page.next_cursor
+      });
+      billingPayments=mergeUniqueRows(billingPayments,next.items,'payment_id')
+        .sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||Number(b.payment_id)-Number(a.payment_id));
+      billingModel={...billingModel,items:billingPayments,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='balance'&&state.view==='list'&&statementModel?.page?.next_offset!=null){
+    loader=async()=>{
+      const next=await staffCostApi.statement(periodIdsForRange(),{
+        limit:100,
+        offset:statementModel.page.next_offset
+      });
+      const items=mergeUniqueRows(statementModel.items,next.items,'staff_member_id');
+      statementModel={...statementModel,items,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }
+
+  if(!loader)return;
+
+  const root=$('content');
+  if(!root)return;
+  const sentinel=document.createElement('div');
+  sentinel.setAttribute('aria-hidden','true');
+  sentinel.style.cssText='height:1px;width:1px;opacity:0;pointer-events:none';
+  root.appendChild(sentinel);
+
+  const expected=continuationStateKey();
+  continuationObserver=new IntersectionObserver(async entries=>{
+    if(continuationBusy||!entries.some(entry=>entry.isIntersecting))return;
+    continuationBusy=true;
+    continuationObserver?.disconnect();
+    continuationObserver=null;
+    try{
+      await loader();
+      if(expected===continuationStateKey())await render();
+    }catch(error){
+      console.error('staff_cost_continuation_failed',error instanceof Error?error.message:String(error));
+    }finally{
+      continuationBusy=false;
+    }
+  },{rootMargin:'700px 0px'});
+  continuationObserver.observe(sentinel);
+}
+
 function periodLabel(id,full=false){const p=periodById.get(Number(id));return p?`${full?cap(monthNames[p.month-1]):monthShort[p.month-1]} ’${String(p.year).slice(-2)}`:'—'}
 function signClass(v){return num(v)>0?'positive':num(v)<0?'negative':'neutral'}
 function push(next){state={...next,depth:(state.depth||0)+1};history.pushState({staffCost:true,...state},'');render()}
