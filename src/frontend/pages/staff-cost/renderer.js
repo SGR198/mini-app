@@ -637,11 +637,13 @@ function prefetchPrimaryViews(){
   if(prefetchedScopes.has(key)||!rangeIds.length)return;
   prefetchedScopes.add(key);
   const {dateFrom,dateTo}=paymentDateRange();
-  Promise.allSettled([
+  const tasks=[
     staffCostApi.payments(dateFrom,dateTo,{limit:100}),
-    staffCostApi.statement(rangeIds,{limit:100,offset:0}),
-    staffCostApi.summary(selectedIds())
-  ]);
+    staffCostApi.statement(rangeIds,{limit:100,offset:0})
+  ];
+  const summaryIds=selectedIds();
+  if(summaryIds.length)tasks.push(staffCostApi.summary(summaryIds));
+  Promise.allSettled(tasks);
 }
 let continuationObserver=null;
 let continuationBusy=false;
@@ -1281,6 +1283,8 @@ function renderBody(){if(state.section==='accruals'){if(state.view==='body_repai
 let renderEpoch=0;
 async function render(){
   const token=++renderEpoch;
+  continuationObserver?.disconnect();
+  continuationObserver=null;
   renderChrome();
   renderFilter();
   try{
@@ -1298,6 +1302,7 @@ async function render(){
   renderChrome();
   renderBody();
   renderFilter();
+  installCurrentContinuation();
   queueMicrotask(prefetchPrimaryViews);
 }
 window.addEventListener('popstate',async e=>{
