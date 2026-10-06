@@ -17,11 +17,13 @@ const sourceIndexPath=join(root,"src/frontend/index.html");
 const publicRendererPath=join(root,"public/app/pages/staff-cost/renderer.js");
 const publicCssPath=join(root,"public/app/styles/staff-cost.css");
 const publicIndexPath=join(root,"public/index.html");
+const apiPath=join(root,"src/frontend/pages/staff-cost/api.js");
 
-const [renderer,css,index,publicRenderer,publicCss,publicIndex]=await Promise.all([
+const [renderer,css,index,api,publicRenderer,publicCss,publicIndex]=await Promise.all([
   readFile(rendererPath,"utf8"),
   readFile(cssPath,"utf8"),
   readFile(sourceIndexPath,"utf8"),
+  readFile(apiPath,"utf8"),
   readFile(publicRendererPath,"utf8"),
   readFile(publicCssPath,"utf8"),
   readFile(publicIndexPath,"utf8")
@@ -57,8 +59,7 @@ const rendererMarkers=[
   "Работы ЗН",
   "Кузовные заказ-наряды",
   "Без КТУ",
-  "Оплаты клиентов · по дате оплаты",
-  "staff_cost.snapshot"
+  "Оплаты клиентов · по дате оплаты"
 ];
 
 const cssMarkers=[
@@ -89,6 +90,9 @@ for(const marker of rendererMarkers){
 }
 for(const marker of cssMarkers){
   if(!css.includes(marker)) failures.push(`missing css marker: ${marker}`);
+}
+if(!api.includes('action:"staff_cost.snapshot"')){
+  failures.push("missing API action: staff_cost.snapshot");
 }
 for(const marker of stateMarkers){
   if(!renderer.includes(marker)) failures.push(`missing state marker: ${marker}`);
