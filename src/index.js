@@ -1,4 +1,5 @@
 const STAFF_COST_PATH = "/api/staff-cost";
+const MINIAPP_PATH = "/api/miniapp";
 
 function jsonError(status, message, extraHeaders = {}) {
   return new Response(JSON.stringify({ ok: false, error: message }), {
@@ -11,17 +12,21 @@ function jsonError(status, message, extraHeaders = {}) {
   });
 }
 
-async function proxyStaffCost(request, env) {
+async function proxyJsonPost(request, upstreamUrl, upstreamOrigin) {
   if (request.method !== "POST") {
     return jsonError(405, "method_not_allowed", { Allow: "POST" });
   }
 
+  if (!upstreamUrl) {
+    return jsonError(502, "upstream_not_configured");
+  }
+
   try {
-    const upstream = await fetch(env.SUPABASE_STAFF_COST_URL, {
+    const upstream = await fetch(upstreamUrl, {
       method: "POST",
       headers: {
         "Content-Type": request.headers.get("Content-Type") || "application/json",
-        Origin: env.SUPABASE_ALLOWED_ORIGIN,
+        Origin: upstreamOrigin,
       },
       body: request.body,
       redirect: "manual",
@@ -48,7 +53,19 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === STAFF_COST_PATH) {
-      return proxyStaffCost(request, env);
+      return proxyJsonPost(
+        request,
+        env.SUPABASE_STAFF_COST_URL,
+        env.SUPABASE_ALLOWED_ORIGIN,
+      );
+    }
+
+    if (url.pathname === MINIAPP_PATH) {
+      return proxyJsonPost(
+        request,
+        env.SUPABASE_MINIAPP_URL,
+        env.SUPABASE_ALLOWED_ORIGIN,
+      );
     }
 
     if (url.pathname.startsWith("/api/")) {
