@@ -21,3 +21,18 @@ Rules:
 - Use Cloudflare Workers Static Assets for the Mini App frontend.
 - Keep business data and canonical domain logic in Supabase.
 - Do not move API/runtime logic from Supabase to Cloudflare unless a separate issue explicitly requires it.
+
+## Cross-repository boundary
+
+`SGR198/mini-app` owns frontend source, Cloudflare Worker source and renderer build source.
+
+`SGR198/database` owns PostgreSQL, migrations, Supabase Edge Functions, access/delivery integration and database-facing application contracts.
+
+Canonical cross-repository contract:
+`SGR198/database/applications/mini-app/`.
+
+Canonical architecture decision:
+`SGR198/database/docs/adr/applications/mini-app/_scope/0028-mini-app-ownership-backend-and-rendering-boundary.md`.
+
+Do not copy PostgreSQL/Edge implementation into this repository.
+Do not copy frontend source into `SGR198/database`.
