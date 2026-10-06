@@ -399,7 +399,7 @@ function bodyRepairWorkOrderCard(item){
     <div class="body-wo-top"><div class="body-wo-number">ЗН № ${esc(item.work_order_number||item.work_order_id||'—')}</div><div class="body-money-chips"><span class="body-money-chip work">Раб: <b>${rub(item.repair_final_amount)}</b></span><span class="body-money-chip parts">ЗЧ: <b>${rub(item.parts_final_amount)}</b></span><span class="body-money-chip materials">Расх: <b>${rub(item.material_final_amount)}</b></span></div></div>
     <div class="body-wo-meta">${esc(bodyDateText(item.work_order_date))}<span>•</span>${esc(auto)}<span>•</span>${esc(customer)}</div>
     <div class="body-wo-plate">${esc(plate)}</div>
-    <div class="body-calc-grid"><div><span>База</span><b>${rub(item.calculation_base_amount)}</b></div><div><span>КТУ</span><b>${esc(bodyDecimal(item.ktu))}</b></div><div><span>Процент</span><b>${esc(bodyPercent(item.compensation_percent))}</b></div><div class="accent"><span>Начислено</span><b>${rub(item.accrual_amount)}</b></div></div>
+    <div class="body-calc-grid"><div class="${String(item.calculation_base_mode)==='manual'?'base-manual':''}"><span>База</span><b>${rub(item.calculation_base_amount)}</b></div><div><span>КТУ</span><b>${esc(bodyDecimal(item.ktu))}</b></div><div><span>Процент</span><b>${esc(bodyPercent(item.compensation_percent))}</b></div><div class="accent"><span>Начислено</span><b>${rub(item.accrual_amount)}</b></div></div>
     ${bodyWorkOrderChevron()}
   </article>`;
 }
@@ -594,11 +594,11 @@ function renderAccrualSource(){
   if(calculationKind==='work_order_ktu_percent'){
     const rowHtml=items.map(i=>{
       const documentLabel=i.work_order_id?'ЗН №'+esc(i.work_order_number||i.work_order_id):'Основание';
-      const calc='База '+plainAmount(i.calculation_base_amount)+' · КТУ '+decimal(i.ktu)+' · '+decimal(i.compensation_percent)+'%'+(num(i.accrual_adjustment)?' · '+signedAmount(i.accrual_adjustment):'');
+      const calc='<span class="calc-base '+(String(i.calculation_base_mode)==='manual'?'base-manual':'')+'">База '+esc(plainAmount(i.calculation_base_amount))+'</span> · КТУ '+esc(decimal(i.ktu))+' · '+esc(decimal(i.compensation_percent))+'%'+(num(i.accrual_adjustment)?' · '+esc(signedAmount(i.accrual_adjustment)):'');
       const drillable=num(i.repair_position_count)>0;
       const amountContent=`${rub(i.accrual_amount)}${drillable?'<svg class="register-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>':''}`;
-      if(drillable)return `<button type="button" class="source-register-row drillable" data-source-item="${i.source_item_id}"><span class="register-document">${documentLabel}</span><span class="register-calc">${esc(calc)}</span><span class="register-amount">${amountContent}</span></button>`;
-      return `<div class="source-register-row"><span class="register-document">${documentLabel}</span><span class="register-calc">${esc(calc)}</span><span class="register-amount">${amountContent}</span></div>`;
+      if(drillable)return `<button type="button" class="source-register-row drillable" data-source-item="${i.source_item_id}"><span class="register-document">${documentLabel}</span><span class="register-calc">${calc}</span><span class="register-amount">${amountContent}</span></button>`;
+      return `<div class="source-register-row"><span class="register-document">${documentLabel}</span><span class="register-calc">${calc}</span><span class="register-amount">${amountContent}</span></div>`;
     }).join('');
     detailHtml=`<div class="source-register-heading"><h2>Реестр расчёта</h2><span class="source-register-count">${esc(recordCountLabel(source.item_count))}</span></div>
       ${rowHtml?`<div class="source-register"><div class="source-register-head"><span>Документ</span><span>Расчёт</span><span class="register-amount">Сумма</span></div>${rowHtml}</div>`:empty('Нет строк начисления')}`;
@@ -655,8 +655,10 @@ function renderAccrualRepairPositions(){
     return `<div class="source-register-row"><span class="register-document">${esc(p.repair_name||('Работа #'+p.repair_item_id))}</span><span class="register-calc">${esc(calc)}</span><span class="register-amount">${rub(p.final_amount)}</span></div>`;
   }).join('');
   const workOrderLabel=item.work_order_id?'ЗН №'+esc(item.work_order_number||item.work_order_id):'Основание';
+  const repairBaseClass=String(item.calculation_base_mode)==='manual'?'repair-base-note base-manual':'repair-base-note';
   $('content').innerHTML=`<div class="employee-heading"><button type="button" class="employee-back" data-repair-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>${esc(name)}</h1><span class="employee-divider" aria-hidden="true"></span><div class="accrual-snapshot"><span class="snapshot-dot" aria-hidden="true"></span>Данные на ${esc(stamp)}</div></div>
-    <div class="employee-summary"><div class="employee-summary-line"><span class="employee-summary-label">${workOrderLabel}</span><span class="employee-period-pill">${cap(monthNames[Number(period.reporting_month)-1]||'')} ${period.reporting_year}</span></div><div class="employee-summary-value">${rub(item.calculation_base_amount)}</div></div>
+    <div class="employee-summary"><div class="employee-summary-line"><span class="employee-summary-label">${workOrderLabel} · Работы ЗН</span><span class="employee-period-pill">${cap(monthNames[Number(period.reporting_month)-1]||'')} ${period.reporting_year}</span></div><div class="employee-summary-value">${rub(item.repair_final_amount)}</div></div>
+    <div class="${repairBaseClass}"><span>База КТУ</span><strong>${rub(item.calculation_base_amount)}</strong></div>
     <div class="source-register-heading"><h2>Позиции работ</h2><span class="source-register-count">${esc(recordCountLabel(item.repair_position_count))}</span></div>
     ${num(item.repair_position_count)>0?`<div class="source-register repair-position-register"><div class="source-register-head"><span>Работа</span><span>Расчёт</span><span class="register-amount">Итог</span></div>${rows}</div>`:empty('Нет позиций работ')}
     <button type="button" class="source-back-float" data-repair-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
