@@ -44,20 +44,27 @@ Cloudflare build/deploy runs the frontend build before Wrangler.
 
 ## Data loading
 
-Staff Cost uses view/use-case API contracts.
+Staff Cost uses bounded view/use-case contracts. The native frontend does not load the full Staff Cost history snapshot.
 
 ```text
-bootstrap              -> metadata only
-accruals               -> paginated
-employee detail        -> on demand
-payments               -> paginated
-statement              -> paginated
+initial                -> metadata + current accrual page
+accruals               -> selected reporting periods
+employee               -> period/source summaries
+employee source        -> source rows on demand
+repair positions       -> terminal drilldown on demand
+body repair accruals   -> selected reporting periods
+body repair work orders-> cursor-paginated on demand
+client payments        -> cursor-paginated by payment date
+payments               -> cursor-paginated by payment date
+statement              -> selected reporting periods
 statement employee     -> on demand
-summary                -> selected periods
-body repair drilldown  -> on demand
+statement month        -> terminal drilldown
+summary                -> selected reporting periods
 ```
 
-List continuation uses IntersectionObserver prefetch near the end of the current list.
+Primary tabs use an in-memory request cache and background prefetch. Deep drilldowns stay lazy. Growing registers use cursor/offset continuation through an invisible IntersectionObserver sentinel.
+
+Payroll payloads are not stored in LocalStorage or sessionStorage.
 
 ## Access
 

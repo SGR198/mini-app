@@ -1,26 +1,57 @@
-import { loadStaffCostPageSnapshot } from "./api.js";
+import { staffCostApi } from "./api.js";
 
 export async function mountStaffCostDashboard2(){
 'use strict';
-let data;
-try{data=await loadStaffCostPageSnapshot()}
+let initialPayload;
+try{initialPayload=await staffCostApi.initial()}
 catch(error){
   console.error('staff_cost_dashboard_load_failed',error);
   document.body.innerHTML='<main style="min-height:100vh;display:grid;place-items:center;padding:24px;font-family:system-ui,sans-serif">Страница не найдена</main>';
   return;
 }
-const periods=Array.isArray(data?.entities?.periods)?data.entities.periods:[];
-const staff=Array.isArray(data?.entities?.staff_members)?data.entities.staff_members:[];
-const sources=Array.isArray(data?.entities?.payment_sources)?data.entities.payment_sources:[];
-const accruals=Array.isArray(data?.facts?.accruals)?data.facts.accruals:[];
-const accrualHierarchy=data?.facts?.accrual_hierarchy&&typeof data.facts.accrual_hierarchy==='object'?data.facts.accrual_hierarchy:{};
-const accrualEmployees=Array.isArray(accrualHierarchy.employees)?accrualHierarchy.employees:[];
-const payments=Array.isArray(data?.facts?.payments)?data.facts.payments:[];
-const balances=Array.isArray(data?.facts?.balances)?data.facts.balances:[];
-const summaries=Array.isArray(data?.facts?.monthly_summary)?data.facts.monthly_summary:[];
-const bodyRepairWorkOrders=Array.isArray(data?.facts?.body_repair_work_orders)?data.facts.body_repair_work_orders:[];
-const bodyRepairWorkOrderCatalog=Array.isArray(data?.facts?.body_repair_work_order_catalog)?data.facts.body_repair_work_order_catalog:[];
-const billingPayments=Array.isArray(data?.facts?.billing_payments)?data.facts.billing_payments:[];
+
+const data={
+  version:Number(initialPayload?.payload_version)||13,
+  meta:{generated_at:initialPayload?.generated_at||null},
+  config:initialPayload?.config||{},
+  entities:initialPayload?.entities||{}
+};
+const periods=Array.isArray(data.entities.periods)?data.entities.periods:[];
+const staff=Array.isArray(data.entities.staff_members)?data.entities.staff_members:[];
+const sources=Array.isArray(data.entities.payment_sources)?data.entities.payment_sources:[];
+
+let accrualModel=initialPayload?.accruals||null;
+let accrualModelKey=Array.isArray(initialPayload?.scope?.period_ids)
+  ? initialPayload.scope.period_ids.map(Number).sort((a,b)=>a-b).join(',')
+  : '';
+let paymentModel=null;
+let paymentModelKey='';
+let statementModel=null;
+let statementModelKey='';
+let statementEmployeeModel=null;
+let statementEmployeeModelKey='';
+let statementMonthModel=null;
+let statementMonthModelKey='';
+let summaryModel=null;
+let summaryModelKey='';
+let bodyAccrualModel=null;
+let bodyAccrualModelKey='';
+let bodyCatalogModel=null;
+let bodyCatalogModelKey='';
+let billingModel=null;
+let billingModelKey='';
+
+let accrualEmployees=[];
+let payments=[];
+let balances=[];
+let summaries=[];
+let bodyRepairWorkOrders=[];
+let bodyRepairWorkOrderCatalog=[];
+let billingPayments=[];
+
+const employeeModels=new Map();
+const sourceModels=new Map();
+const repairModels=new Map();
 const sectionLabels={accruals:'Начисления',payments:'Выплаты',balance:'Ведомость',summary:'Общий баланс'};
 const monthNames=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const monthShort=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -38,13 +69,13 @@ const draftRecordCountLabel=v=>recordCountLabel(v);
 const staffById=new Map(staff.map(x=>[Number(x.id),x]));
 const sourceById=new Map(sources.map(x=>[Number(x.id),x]));
 const periodById=new Map(periods.map(x=>[Number(x.id),x]));
-const accrualEmployeeById=new Map(accrualEmployees.map(x=>[Number(x.staff_member_id),x]));
+const accrualEmployeeById=new Map();
 const latest=periods.slice().sort((a,b)=>(a.year-b.year)||(a.month-b.month)).at(-1);
-const baseYear=years.includes(Number(latest?.year))?Number(latest?.year):years[0];
-const baseMonth=Number(latest?.month)||1;
+const initialPeriod=periodById.get(Number(initialPayload?.config?.default_period_id))||latest;
+const baseYear=years.includes(Number(initialPeriod?.year))?Number(initialPeriod?.year):years[0];
+const baseMonth=Number(initialPeriod?.month)||1;
 const baseQuarter=Math.floor((baseMonth-1)/3)+1;
-const latestAccrual=accruals.slice().sort((a,b)=>(Number(a.reporting_year)-Number(b.reporting_year))||(Number(a.reporting_month)-Number(b.reporting_month))).at(-1);
-const accrualMonthKey=latestAccrual?Number(latestAccrual.reporting_year)*12+Number(latestAccrual.reporting_month)-1:baseYear*12+baseMonth-1;
+const accrualMonthKey=baseYear*12+baseMonth-1;
 const initial={section:'accruals',year:baseYear,quarter:baseQuarter,selected_period_ids:null,rangeStart:accrualMonthKey,rangeEnd:accrualMonthKey,view:'list',employee_id:null,employeeAllPeriods:false,collapsed_period_ids:[],collapsed_body_employee_ids:[],reporting_period_id:null,source_code:null,source_item_id:null,payment_id:null,payment_status_filter:null,payment_type_filter:null,depth:0};
 let state=history.state?.staffCost?{...initial,...history.state}:initial;
 const $=id=>document.getElementById(id);
@@ -55,65 +86,34 @@ const monthOf=k=>k%12+1;
 function accrualIds(){return periods.filter(p=>monthKey(p.year,p.month)>=state.rangeStart&&monthKey(p.year,p.month)<=state.rangeEnd).map(p=>Number(p.id))}
 function allAccrualIds(){return periods.map(p=>Number(p.id))}
 function additiveSum(rows,field){return rows.reduce((s,r)=>s+num(r?.[field]),0)}
-function accrualAggregate(ids){
-  const idSet=new Set((ids||[]).map(Number));
-  const rows=accruals.filter(r=>idSet.has(Number(r.reporting_period_id)));
-  const byEmp=new Map();
-  rows.forEach(r=>{
-    const id=Number(r.staff_member_id),x=byEmp.get(id)||{staff_member_id:id,fio_full:r.fio_full,calculated_accrual_total:0,accrual_adjustment_total:0,accrual_total:0};
-    x.fio_full=x.fio_full||r.fio_full;
-    x.calculated_accrual_total+=num(r.calculated_accrual_total);
-    x.accrual_adjustment_total+=num(r.accrual_adjustment_total);
-    x.accrual_total+=num(r.accrual_total);
-    byEmp.set(id,x);
-  });
-  return {
-    calculated_accrual_total:additiveSum(rows,'calculated_accrual_total'),
-    accrual_adjustment_total:additiveSum(rows,'accrual_adjustment_total'),
-    accrual_total:additiveSum(rows,'accrual_total'),
-    body_accrual_total:additiveSum(rows,'body_accrual_total'),
-    service_advisor_accrual_total:additiveSum(rows,'service_advisor_accrual_total'),
-    mechanical_accrual_total:additiveSum(rows,'mechanical_accrual_total'),
-    employee_count:byEmp.size,
-    employees:[...byEmp.values()].sort((a,b)=>num(b.accrual_total)-num(a.accrual_total)||String(a.fio_full||'').localeCompare(String(b.fio_full||''),'ru'))
-  };
+function scopeKey(ids){return [...new Set((ids||[]).map(Number))].sort((a,b)=>a-b).join(',')}
+function touchGenerated(payload){if(payload?.generated_at)data.meta.generated_at=payload.generated_at}
+function currentAccrualAggregate(){
+  const summary=accrualModel?.summary||{};
+  return {...summary,employees:Array.isArray(accrualModel?.items)?accrualModel.items:[]};
 }
-function currentAccrualAggregate(){return accrualAggregate(accrualIds())}
 function employeeAccrualTotal(employeeId,ids){
+  const employee=accrualEmployeeById.get(Number(employeeId));
   const idSet=new Set((ids||[]).map(Number));
-  return additiveSum(accruals.filter(r=>Number(r.staff_member_id)===Number(employeeId)&&idSet.has(Number(r.reporting_period_id))),'accrual_total');
+  return (Array.isArray(employee?.periods)?employee.periods:[])
+    .filter(r=>idSet.has(Number(r.reporting_period_id)))
+    .reduce((sum,r)=>sum+num(r.accrual_total),0);
 }
 function paymentRowsBase(employeeId=null){
-  return payments.filter(p=>{
-    const [y,m]=String(p.payment_date||'').split('-').map(Number);
-    const k=monthKey(y,m);
-    return Number.isFinite(k)
-      && k>=state.rangeStart
-      && k<=state.rangeEnd
-      && (employeeId==null||Number(p.staff_member_id)===Number(employeeId));
-  });
+  return payments
+    .filter(p=>employeeId==null||Number(p.staff_member_id)===Number(employeeId))
+    .slice()
+    .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
 }
-function paymentRowsFiltered(employeeId=null){
-  return paymentRowsBase(employeeId).filter(p=>{
-    if(state.payment_status_filter&&p.status!==state.payment_status_filter)return false;
-    if(state.payment_type_filter){
-      const src=sourceById.get(Number(p.payment_source_id));
-      if(src?.code!==state.payment_type_filter)return false;
-    }
-    return true;
-  }).sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
-}
-function paymentSummary(employeeId=null){
-  const rows=paymentRowsBase(employeeId),paid=rows.filter(p=>p.status==='paid'),draft=rows.filter(p=>p.status==='draft');
-  return {
-    total_count:rows.length,
-    total_amount:additiveSum(rows,'amount'),
-    paid_count:paid.length,
-    paid_total:additiveSum(paid,'amount'),
-    draft_count:draft.length,
-    draft_total:additiveSum(draft,'amount')
-  };
-}
+function paymentRowsFiltered(employeeId=null){return paymentRowsBase(employeeId)}
+function paymentSummary(){return paymentModel?.summary||{
+  total_count:payments.length,
+  total_amount:additiveSum(payments,'amount'),
+  paid_count:payments.filter(p=>p.status==='paid').length,
+  paid_total:additiveSum(payments.filter(p=>p.status==='paid'),'amount'),
+  draft_count:payments.filter(p=>p.status==='draft').length,
+  draft_total:additiveSum(payments.filter(p=>p.status==='draft'),'amount')
+}}
 function paymentSourceLabel(code,name){if(code==='cash')return 'Нал';if(code==='bank')return 'Безнал';return name||code||''}
 function paymentTypeOptions(){
   return sources.map(s=>({code:s.code,label:paymentSourceLabel(s.code,s.name)}));
@@ -264,6 +264,484 @@ function quarterMonths(year,q){const start=(q-1)*3+1;return[0,1,2].map(i=>({year
 function quarterPeriods(){const months=new Set(quarterMonths(state.year,state.quarter).map(x=>x.month));return periods.filter(p=>Number(p.year)===Number(state.year)&&months.has(Number(p.month))).sort((a,b)=>a.month-b.month)}
 function selectedIds(){const qp=quarterPeriods().map(p=>Number(p.id));if(state.selected_period_ids===null)return qp;const valid=new Set(qp);return (state.selected_period_ids||[]).map(Number).filter(id=>valid.has(id))}
 function selectedPeriodRows(){const ids=new Set(selectedIds());return periods.filter(p=>ids.has(Number(p.id))).sort((a,b)=>(a.year-b.year)||(a.month-b.month))}
+
+function periodIdsForRange(){
+  return periods
+    .filter(p=>monthKey(p.year,p.month)>=state.rangeStart&&monthKey(p.year,p.month)<=state.rangeEnd)
+    .map(p=>Number(p.id));
+}
+function paymentDateRange(){
+  const a=state.rangeStart,b=state.rangeEnd;
+  const ay=yearOf(a),am=monthOf(a),by=yearOf(b),bm=monthOf(b);
+  const dateFrom=String(ay)+'-'+String(am).padStart(2,'0')+'-01';
+  const lastDay=new Date(Date.UTC(by,bm,0)).getUTCDate();
+  const dateTo=String(by)+'-'+String(bm).padStart(2,'0')+'-'+String(lastDay).padStart(2,'0');
+  return {dateFrom,dateTo};
+}
+function chunks(values,size=12){
+  const out=[];
+  for(let i=0;i<values.length;i+=size)out.push(values.slice(i,i+size));
+  return out;
+}
+function emptyAccrualModel(ids=[]){
+  return {
+    contract:'staff_cost_accruals',
+    version:2,
+    generated_at:data.meta.generated_at,
+    scope:{period_ids:ids},
+    summary:{
+      calculated_accrual_total:0,
+      accrual_adjustment_total:0,
+      accrual_total:0,
+      body_accrual_total:0,
+      service_advisor_accrual_total:0,
+      mechanical_accrual_total:0,
+      employee_count:0
+    },
+    items:[],
+    page:{limit:100,offset:0,total_count:0,next_offset:null}
+  };
+}
+function mergeAccrualModels(parts,ids){
+  if(!parts.length)return emptyAccrualModel(ids);
+  const employees=new Map();
+  const summary={
+    calculated_accrual_total:0,
+    accrual_adjustment_total:0,
+    accrual_total:0,
+    body_accrual_total:0,
+    service_advisor_accrual_total:0,
+    mechanical_accrual_total:0,
+    employee_count:0
+  };
+  for(const part of parts){
+    for(const field of Object.keys(summary)){
+      if(field!=='employee_count')summary[field]+=num(part?.summary?.[field]);
+    }
+    for(const row of part?.items||[]){
+      const id=Number(row.staff_member_id);
+      const target=employees.get(id)||{
+        staff_member_id:id,
+        fio_full:row.fio_full,
+        calculated_accrual_total:0,
+        accrual_adjustment_total:0,
+        accrual_total:0,
+        body_accrual_total:0,
+        service_advisor_accrual_total:0,
+        mechanical_accrual_total:0
+      };
+      target.fio_full=target.fio_full||row.fio_full;
+      for(const field of [
+        'calculated_accrual_total','accrual_adjustment_total','accrual_total',
+        'body_accrual_total','service_advisor_accrual_total','mechanical_accrual_total'
+      ])target[field]+=num(row[field]);
+      employees.set(id,target);
+    }
+  }
+  const items=[...employees.values()].sort((a,b)=>num(b.accrual_total)-num(a.accrual_total)||String(a.fio_full||'').localeCompare(String(b.fio_full||''),'ru'));
+  summary.employee_count=items.length;
+  return {
+    contract:'staff_cost_accruals',
+    version:2,
+    generated_at:parts.map(x=>x?.generated_at).filter(Boolean).at(-1)||data.meta.generated_at,
+    scope:{period_ids:ids},
+    summary,
+    items,
+    page:{limit:items.length,offset:0,total_count:items.length,next_offset:null}
+  };
+}
+async function loadAccrualScope(ids){
+  const clean=[...new Set((ids||[]).map(Number))].sort((a,b)=>a-b);
+  const key=scopeKey(clean);
+  if(key===accrualModelKey&&accrualModel)return accrualModel;
+  if(!clean.length){
+    accrualModel=emptyAccrualModel([]);
+    accrualModelKey='';
+    return accrualModel;
+  }
+  const parts=[];
+  for(const partIds of chunks(clean,12)){
+    let offset=0;
+    let aggregate=null;
+    const rows=[];
+    do{
+      const page=await staffCostApi.accruals(partIds,{limit:100,offset});
+      touchGenerated(page);
+      aggregate=aggregate||page;
+      rows.push(...(page.items||[]));
+      offset=page?.page?.next_offset;
+    }while(offset!=null);
+    parts.push({...aggregate,items:rows});
+  }
+  accrualModel=mergeAccrualModels(parts,clean);
+  accrualModelKey=key;
+  touchGenerated(accrualModel);
+  return accrualModel;
+}
+async function loadEmployee(staffMemberId,ids){
+  const clean=[...new Set((ids||[]).map(Number))].sort((a,b)=>a-b);
+  const key=Number(staffMemberId)+':'+scopeKey(clean);
+  if(employeeModels.has(key)){
+    const cached=employeeModels.get(key);
+    accrualEmployeeById.set(Number(staffMemberId),cached);
+    return cached;
+  }
+  const parts=await Promise.all(chunks(clean,12).map(part=>staffCostApi.employee(staffMemberId,part)));
+  const periodsOut=parts.flatMap(x=>x?.periods||[])
+    .sort((a,b)=>(Number(b.reporting_year)-Number(a.reporting_year))||(Number(b.reporting_month)-Number(a.reporting_month))||Number(b.reporting_period_id)-Number(a.reporting_period_id));
+  const model={
+    staff_member_id:Number(staffMemberId),
+    fio_full:parts.find(x=>x?.fio_full)?.fio_full||staffById.get(Number(staffMemberId))?.fio_full,
+    summary:{
+      calculated_accrual_total:parts.reduce((sum,x)=>sum+num(x?.summary?.calculated_accrual_total),0),
+      accrual_adjustment_total:parts.reduce((sum,x)=>sum+num(x?.summary?.accrual_adjustment_total),0),
+      accrual_total:parts.reduce((sum,x)=>sum+num(x?.summary?.accrual_total),0)
+    },
+    periods:periodsOut
+  };
+  parts.forEach(touchGenerated);
+  employeeModels.set(key,model);
+  accrualEmployeeById.set(Number(staffMemberId),model);
+  return model;
+}
+async function loadEmployeeSource(){
+  const key=Number(state.employee_id)+':'+Number(state.reporting_period_id)+':'+String(state.source_code);
+  let payload=sourceModels.get(key);
+  if(!payload){
+    payload=await staffCostApi.employeeSource(
+      state.employee_id,
+      state.reporting_period_id,
+      state.source_code
+    );
+    sourceModels.set(key,payload);
+  }
+  touchGenerated(payload);
+  let employee=accrualEmployeeById.get(Number(state.employee_id));
+  if(!employee){
+    employee=await loadEmployee(state.employee_id,[Number(state.reporting_period_id)]);
+  }
+  let period=employee?.periods?.find(x=>Number(x.reporting_period_id)===Number(state.reporting_period_id));
+  if(!period){
+    const one=await loadEmployee(state.employee_id,[Number(state.reporting_period_id)]);
+    period=one?.periods?.[0];
+    if(period){
+      const periodsKeep=(employee?.periods||[]).filter(x=>Number(x.reporting_period_id)!==Number(period.reporting_period_id));
+      employee={...employee,periods:[...periodsKeep,period]};
+      accrualEmployeeById.set(Number(state.employee_id),employee);
+    }
+  }
+  let source=period?.sources?.find(x=>String(x.source_code)===String(state.source_code));
+  if(source){
+    Object.assign(source,payload.source||{}, {items:payload.items||[]});
+  }
+  return payload;
+}
+async function loadRepairPositions(){
+  await loadEmployeeSource();
+  const key=Number(state.employee_id)+':'+Number(state.reporting_period_id)+':'+String(state.source_code)+':'+Number(state.source_item_id);
+  let payload=repairModels.get(key);
+  if(!payload){
+    payload=await staffCostApi.repairPositions(
+      state.employee_id,
+      state.reporting_period_id,
+      state.source_code,
+      state.source_item_id
+    );
+    repairModels.set(key,payload);
+  }
+  touchGenerated(payload);
+  const employee=accrualEmployeeById.get(Number(state.employee_id));
+  const period=employee?.periods?.find(x=>Number(x.reporting_period_id)===Number(state.reporting_period_id));
+  const source=period?.sources?.find(x=>String(x.source_code)===String(state.source_code));
+  const item=source?.items?.find(x=>Number(x.source_item_id)===Number(state.source_item_id));
+  if(item){
+    Object.assign(item,payload.item||{});
+    item.repair_positions=payload.items||[];
+    item.repair_position_count=(payload.items||[]).length;
+  }
+}
+async function loadBodyAccruals(ids){
+  const key=scopeKey(ids);
+  if(bodyAccrualModel&&bodyAccrualModelKey===key)return bodyAccrualModel;
+  const payload=await staffCostApi.bodyRepairAccruals(ids);
+  touchGenerated(payload);
+  bodyAccrualModel=payload;
+  bodyAccrualModelKey=key;
+  bodyRepairWorkOrders=payload.work_orders||[];
+  accrualEmployees=payload.employees||[];
+  for(const employee of accrualEmployees){
+    accrualEmployeeById.set(Number(employee.staff_member_id),employee);
+  }
+  return payload;
+}
+async function loadBodyWorkOrders(ids){
+  await loadBodyAccruals(ids);
+  const key=scopeKey(ids);
+  if(bodyCatalogModel&&bodyCatalogModelKey===key)return bodyCatalogModel;
+  const payload=await staffCostApi.bodyRepairWorkOrders(ids,{limit:100});
+  touchGenerated(payload);
+  bodyCatalogModel=payload;
+  bodyCatalogModelKey=key;
+  bodyRepairWorkOrderCatalog=payload.items||[];
+  return payload;
+}
+async function loadBillingPayments(){
+  const {dateFrom,dateTo}=paymentDateRange();
+  const key=dateFrom+':'+dateTo;
+  if(billingModel&&billingModelKey===key)return billingModel;
+  const payload=await staffCostApi.billingPayments(dateFrom,dateTo,{limit:100});
+  touchGenerated(payload);
+  billingModel=payload;
+  billingModelKey=key;
+  billingPayments=payload.items||[];
+  return payload;
+}
+async function loadStaffPayments(){
+  const {dateFrom,dateTo}=paymentDateRange();
+  const employeeId=state.view==='payment_employee'?Number(state.employee_id):null;
+  const key=[dateFrom,dateTo,employeeId??'',state.payment_status_filter||'',state.payment_type_filter||''].join(':');
+  if(paymentModel&&paymentModelKey===key)return paymentModel;
+  const payload=await staffCostApi.payments(dateFrom,dateTo,{
+    staffMemberId:employeeId,
+    status:state.payment_status_filter,
+    sourceCode:state.payment_type_filter,
+    limit:100
+  });
+  touchGenerated(payload);
+  paymentModel=payload;
+  paymentModelKey=key;
+  payments=payload.items||[];
+  return payload;
+}
+async function loadStatementList(ids){
+  const key=scopeKey(ids);
+  if(statementModel&&statementModelKey===key)return statementModel;
+  const payload=await staffCostApi.statement(ids,{limit:100,offset:0});
+  touchGenerated(payload);
+  statementModel=payload;
+  statementModelKey=key;
+  return payload;
+}
+async function loadStatementEmployee(ids){
+  const key=Number(state.employee_id)+':'+scopeKey(ids);
+  if(statementEmployeeModel&&statementEmployeeModelKey===key){
+    balances=statementEmployeeModel.periods||[];
+    payments=statementEmployeeModel.payments||[];
+    return statementEmployeeModel;
+  }
+  const payload=await staffCostApi.statementEmployee(state.employee_id,ids);
+  touchGenerated(payload);
+  statementEmployeeModel=payload;
+  statementEmployeeModelKey=key;
+  balances=payload.periods||[];
+  payments=payload.payments||[];
+  return payload;
+}
+async function loadStatementMonth(){
+  const key=Number(state.employee_id)+':'+Number(state.reporting_period_id);
+  if(statementMonthModel&&statementMonthModelKey===key){
+    balances=statementMonthModel.balance?[statementMonthModel.balance]:[];
+    payments=statementMonthModel.payments||[];
+    return statementMonthModel;
+  }
+  const payload=await staffCostApi.statementMonth(state.employee_id,state.reporting_period_id);
+  touchGenerated(payload);
+  statementMonthModel=payload;
+  statementMonthModelKey=key;
+  balances=payload.balance?[payload.balance]:[];
+  payments=payload.payments||[];
+  return payload;
+}
+async function loadSummary(ids){
+  const key=scopeKey(ids);
+  if(summaryModel&&summaryModelKey===key){
+    summaries=summaryModel.items||[];
+    return summaryModel;
+  }
+  if(!ids.length){
+    summaryModel={items:[],generated_at:data.meta.generated_at};
+    summaryModelKey=key;
+    summaries=[];
+    return summaryModel;
+  }
+  const payload=await staffCostApi.summary(ids);
+  touchGenerated(payload);
+  summaryModel=payload;
+  summaryModelKey=key;
+  summaries=payload.items||[];
+  return payload;
+}
+async function ensureViewData(){
+  const rangeIds=periodIdsForRange();
+  if(state.section==='accruals'){
+    if(state.view==='employee'){
+      await loadAccrualScope(rangeIds);
+      await loadEmployee(state.employee_id,state.employeeAllPeriods?allAccrualIds():rangeIds);
+      return;
+    }
+    if(state.view==='source'){
+      await loadAccrualScope(rangeIds);
+      await loadEmployee(state.employee_id,state.employeeAllPeriods?allAccrualIds():rangeIds);
+      await loadEmployeeSource();
+      return;
+    }
+    if(state.view==='repair_positions'){
+      await loadAccrualScope(rangeIds);
+      await loadEmployee(state.employee_id,state.employeeAllPeriods?allAccrualIds():rangeIds);
+      await loadRepairPositions();
+      return;
+    }
+    if(state.view==='body_repair_accruals'){
+      await Promise.all([loadAccrualScope(rangeIds),loadBodyAccruals(rangeIds)]);
+      return;
+    }
+    if(state.view==='body_repair_work_orders'){
+      await Promise.all([loadAccrualScope(rangeIds),loadBodyWorkOrders(rangeIds)]);
+      return;
+    }
+    if(state.view==='billing_payments'){
+      await loadBillingPayments();
+      return;
+    }
+    await loadAccrualScope(rangeIds);
+    return;
+  }
+  if(state.section==='payments'){
+    if(state.view==='payment'){
+      if(!payments.some(x=>Number(x.id)===Number(state.payment_id)))await loadStaffPayments();
+      return;
+    }
+    await loadStaffPayments();
+    return;
+  }
+  if(state.section==='balance'){
+    if(state.view==='employee_balance'){
+      await Promise.all([loadStatementList(rangeIds),loadStatementEmployee(rangeIds)]);
+      return;
+    }
+    if(state.view==='balance_month'){
+      await loadStatementMonth();
+      return;
+    }
+    await loadStatementList(rangeIds);
+    return;
+  }
+  if(state.section==='summary'){
+    await loadSummary(selectedIds());
+  }
+}
+const prefetchedScopes=new Set();
+function prefetchPrimaryViews(){
+  const rangeIds=periodIdsForRange();
+  const key=scopeKey(rangeIds)+':'+state.rangeStart+':'+state.rangeEnd;
+  if(prefetchedScopes.has(key)||!rangeIds.length)return;
+  prefetchedScopes.add(key);
+  const {dateFrom,dateTo}=paymentDateRange();
+  const tasks=[
+    staffCostApi.payments(dateFrom,dateTo,{limit:100}),
+    staffCostApi.statement(rangeIds,{limit:100,offset:0})
+  ];
+  const summaryIds=selectedIds();
+  if(summaryIds.length)tasks.push(staffCostApi.summary(summaryIds));
+  Promise.allSettled(tasks);
+}
+let continuationObserver=null;
+let continuationBusy=false;
+function mergeUniqueRows(current,next,key){
+  const map=new Map((current||[]).map(row=>[String(row?.[key]),row]));
+  for(const row of next||[])map.set(String(row?.[key]),row);
+  return [...map.values()];
+}
+function continuationStateKey(){
+  return [
+    state.section,state.view,state.employee_id||'',state.rangeStart,state.rangeEnd,
+    state.payment_status_filter||'',state.payment_type_filter||'',scopeKey(periodIdsForRange())
+  ].join('|');
+}
+function installCurrentContinuation(){
+  continuationObserver?.disconnect();
+  continuationObserver=null;
+  if(continuationBusy)return;
+
+  let loader=null;
+
+  if(state.section==='payments'&&(state.view==='list'||state.view==='payment_employee')&&paymentModel?.page?.has_more&&paymentModel?.page?.next_cursor){
+    loader=async()=>{
+      const {dateFrom,dateTo}=paymentDateRange();
+      const next=await staffCostApi.payments(dateFrom,dateTo,{
+        staffMemberId:state.view==='payment_employee'?Number(state.employee_id):null,
+        status:state.payment_status_filter,
+        sourceCode:state.payment_type_filter,
+        limit:100,
+        cursor:paymentModel.page.next_cursor
+      });
+      payments=mergeUniqueRows(payments,next.items,'id')
+        .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
+      paymentModel={...paymentModel,items:payments,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='accruals'&&state.view==='body_repair_work_orders'&&bodyCatalogModel?.page?.has_more&&bodyCatalogModel?.page?.next_cursor){
+    loader=async()=>{
+      const next=await staffCostApi.bodyRepairWorkOrders(periodIdsForRange(),{
+        limit:100,
+        cursor:bodyCatalogModel.page.next_cursor
+      });
+      bodyRepairWorkOrderCatalog=mergeUniqueRows(bodyRepairWorkOrderCatalog,next.items,'work_order_id')
+        .sort((a,b)=>String(b.work_order_date||'').localeCompare(String(a.work_order_date||''))||Number(b.work_order_id)-Number(a.work_order_id));
+      bodyCatalogModel={...bodyCatalogModel,items:bodyRepairWorkOrderCatalog,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='accruals'&&state.view==='billing_payments'&&billingModel?.page?.has_more&&billingModel?.page?.next_cursor){
+    loader=async()=>{
+      const {dateFrom,dateTo}=paymentDateRange();
+      const next=await staffCostApi.billingPayments(dateFrom,dateTo,{
+        limit:100,
+        cursor:billingModel.page.next_cursor
+      });
+      billingPayments=mergeUniqueRows(billingPayments,next.items,'payment_id')
+        .sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||Number(b.payment_id)-Number(a.payment_id));
+      billingModel={...billingModel,items:billingPayments,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }else if(state.section==='balance'&&state.view==='list'&&statementModel?.page?.next_offset!=null){
+    loader=async()=>{
+      const next=await staffCostApi.statement(periodIdsForRange(),{
+        limit:100,
+        offset:statementModel.page.next_offset
+      });
+      const items=mergeUniqueRows(statementModel.items,next.items,'staff_member_id');
+      statementModel={...statementModel,items,page:next.page,generated_at:next.generated_at};
+      touchGenerated(next);
+    };
+  }
+
+  if(!loader)return;
+
+  const root=$('content');
+  if(!root)return;
+  const sentinel=document.createElement('div');
+  sentinel.setAttribute('aria-hidden','true');
+  sentinel.style.cssText='height:1px;width:1px;opacity:0;pointer-events:none';
+  root.appendChild(sentinel);
+
+  const expected=continuationStateKey();
+  continuationObserver=new IntersectionObserver(async entries=>{
+    if(continuationBusy||!entries.some(entry=>entry.isIntersecting))return;
+    continuationBusy=true;
+    continuationObserver?.disconnect();
+    continuationObserver=null;
+    try{
+      await loader();
+      if(expected===continuationStateKey())await render();
+    }catch(error){
+      console.error('staff_cost_continuation_failed',error instanceof Error?error.message:String(error));
+    }finally{
+      continuationBusy=false;
+    }
+  },{rootMargin:'700px 0px'});
+  continuationObserver.observe(sentinel);
+}
+
 function periodLabel(id,full=false){const p=periodById.get(Number(id));return p?`${full?cap(monthNames[p.month-1]):monthShort[p.month-1]} ’${String(p.year).slice(-2)}`:'—'}
 function signClass(v){return num(v)>0?'positive':num(v)<0?'negative':'neutral'}
 function push(next){state={...next,depth:(state.depth||0)+1};history.pushState({staffCost:true,...state},'');render()}
@@ -296,7 +774,7 @@ function renderAccruals(){
   const list=Array.isArray(scope?.employees)?scope.employees:[];
   const total=num(scope?.accrual_total),body=num(scope?.body_accrual_total),advisor=num(scope?.service_advisor_accrual_total),mech=num(scope?.mechanical_accrual_total);
   const generated=data?.meta?.generated_at?new Date(data.meta.generated_at):null,stamp=generated&&!Number.isNaN(generated.valueOf())?generated.toLocaleString('ru-RU',{timeZone:'Asia/Yekaterinburg',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')+' ЕКБ':'';
-  $('content').innerHTML='<div class="summary-sticky"><div class="hero"><div class="hero-top"><div class="hero-label">Начисление</div><div class="accrual-snapshot"><span class="snapshot-dot" aria-hidden="true"></span>Данные на '+esc(stamp)+'</div></div><div class="hero-bottom"><div class="hero-value">'+rub(total)+'</div><div class="hero-count"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.3"/><path d="M2.5 19c0-3.6 2.8-6.2 6.5-6.2s6.5 2.6 6.5 6.2v1H2.5z"/><circle cx="17.4" cy="8" r="2.6"/><path d="M17 13.1c2.9 0 4.5 2.1 4.5 5.1v1.8h-3.6v-1c0-2-.7-3.8-2.1-5.2.4-.3.8-.5 1.2-.7z"/></svg><div><strong>'+num(scope?.employee_count)+'</strong><span>сотрудников</span></div></div></div></div><div class="submetrics"><button type="button" class="metric metric-clickable" data-body-repair><span>🔨 Кузовной</span><b>'+rub(body)+'</b></button><div class="metric"><span>👤 Приёмщик</span><b>'+rub(advisor)+'</b></div><div class="metric"><span>🔧 Слесарный</span><b>'+rub(mech)+'</b></div></div></div>'+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"')+'<div class="section-title"><h2>Сотрудники</h2><span>'+list.length+' строк</span></div>'+(list.length?'<div class="list">'+list.map(x=>'<button class="item" data-emp="'+x.staff_member_id+'"><div class="item-top"><div class="item-main"><div class="name">'+esc(shortName(x.fio_full))+'</div></div><div class="amount">'+rub(x.accrual_total)+'</div><svg class="chev" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></button>').join('')+'</div>':empty());
+  $('content').innerHTML='<div class="summary-sticky"><div class="hero"><div class="hero-top"><div class="hero-label">Начисление</div><div class="accrual-snapshot"><span class="snapshot-dot" aria-hidden="true"></span>Данные на '+esc(stamp)+'</div></div><div class="hero-bottom"><div class="hero-value">'+rub(total)+'</div><div class="hero-count"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.3"/><path d="M2.5 19c0-3.6 2.8-6.2 6.5-6.2s6.5 2.6 6.5 6.2v1H2.5z"/><circle cx="17.4" cy="8" r="2.6"/><path d="M17 13.1c2.9 0 4.5 2.1 4.5 5.1v1.8h-3.6v-1c0-2-.7-3.8-2.1-5.2.4-.3.8-.5 1.2-.7z"/></svg><div><strong>'+num(scope?.employee_count)+'</strong><span>сотрудников</span></div></div></div></div><div class="submetrics"><button type="button" class="metric metric-clickable" data-body-repair><span>🔨 Кузовной</span><b>'+rub(body)+'</b></button><div class="metric"><span>👤 Приёмщик</span><b>'+rub(advisor)+'</b></div><div class="metric"><span>🔧 Слесарный</span><b>'+rub(mech)+'</b></div></div></div>'+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"')+'<div class="section-title"><h2>Сотрудники</h2><span>'+num(scope?.employee_count)+' строк</span></div>'+(list.length?'<div class="list">'+list.map(x=>'<button class="item" data-emp="'+x.staff_member_id+'"><div class="item-top"><div class="item-main"><div class="name">'+esc(shortName(x.fio_full))+'</div></div><div class="amount">'+rub(x.accrual_total)+'</div><svg class="chev" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></button>').join('')+'</div>':empty());
   document.querySelectorAll('.filter-dock [data-ftab]').forEach(b=>b.onclick=()=>openFilter(b.dataset.ftab));
   document.querySelector('[data-body-repair]')?.addEventListener('click',openBodyRepairAccruals);
   document.querySelectorAll('[data-emp]').forEach(b=>b.onclick=()=>openAccrualEmployee(Number(b.dataset.emp)));
@@ -343,15 +821,8 @@ function bodyRepairAccruedMap(){
   return map;
 }
 function bodyRepairVisibleWorkOrderCount(){
-  const ids=new Set(accrualIds()),visible=new Set();
-  bodyRepairWorkOrderCatalog.forEach(w=>{
-    const id=Number(w.work_order_id);
-    if(!Number.isFinite(id))return;
-    const memberships=Array.isArray(w.worker_ktu_periods)?w.worker_ktu_periods:[];
-    if(w.has_worker_ktu===false||memberships.length===0){visible.add(id);return}
-    if(memberships.some(p=>ids.has(Number(p.reporting_period_id))))visible.add(id);
-  });
-  return visible.size;
+  if(state.view==='body_repair_work_orders'&&bodyCatalogModel)return num(bodyCatalogModel?.summary?.total_count);
+  return num(bodyAccrualModel?.summary?.work_order_count);
 }
 function bodyRepairWorkOrderGroups(){
   const ids=new Set(accrualIds()),noKtu=[],byPeriod=new Map();
@@ -468,8 +939,7 @@ function bodyRepairGroupHeading(title,count,subtitle=''){
 function openBillingPayments(){push({...state,view:'billing_payments'});setAccrualScroll(0)}
 function clientPaymentMonthKey(value){const m=String(value||'').match(/^(\d{4})-(\d{2})/);return m?monthKey(Number(m[1]),Number(m[2])):null}
 function billingPaymentRows(){
-  return billingPayments.filter(p=>{const k=clientPaymentMonthKey(p.payment_date);return k!==null&&k>=state.rangeStart&&k<=state.rangeEnd})
-    .slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||num(b.payment_id)-num(a.payment_id));
+  return billingPayments.slice().sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||num(b.payment_id)-num(a.payment_id));
 }
 function billingPaymentRow(p){
   const allocations=Array.isArray(p.allocations)?p.allocations:[];
@@ -496,12 +966,12 @@ function billingPaymentRow(p){
 function renderBillingPayments(){
   if(Number(data.version)<12){$('content').innerHTML=empty('Для реестра оплат требуется payload v12');return}
   const rows=billingPaymentRows();
-  const total=rows.reduce((sum,p)=>sum+num(p.amount),0);
-  const allocated=rows.reduce((sum,p)=>sum+num(p.allocated_total),0);
-  const unallocated=rows.reduce((sum,p)=>sum+num(p.unallocated_amount),0);
+  const total=num(billingModel?.summary?.total_amount);
+  const allocated=num(billingModel?.summary?.allocated_total);
+  const unallocated=num(billingModel?.summary?.unallocated_total);
   const remainder=unallocated>0?' · Не распределено '+rub(unallocated):'';
   $('content').innerHTML=bodyRepairHeader('Оплаты клиентов')
-    +'<div class="client-payment-summary"><div><span>Получено за выбранный период</span><strong>'+rub(total)+'</strong></div><small>'+esc(rows.length+' '+countWord(rows.length,'платёж','платежа','платежей'))+' · Распределено '+esc(rub(allocated))+esc(remainder)+'</small></div>'
+    +'<div class="client-payment-summary"><div><span>Получено за выбранный период</span><strong>'+rub(total)+'</strong></div><small>'+esc(num(billingModel?.summary?.total_count)+' '+countWord(num(billingModel?.summary?.total_count),'платёж','платежа','платежей'))+' · Распределено '+esc(rub(allocated))+esc(remainder)+'</small></div>'
     +'<div class="body-register-heading"><h2>Реестр поступлений</h2><span>по дате платежа</span></div>'
     +(rows.length?'<div class="client-payment-list">'+rows.map(billingPaymentRow).join('')+'</div>':empty('Нет клиентских поступлений за выбранный период'))
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
@@ -514,7 +984,7 @@ function renderBodyRepairWorkOrders(){
   const accruedMap=bodyRepairAccruedMap();
   const uniqueCount=bodyRepairVisibleWorkOrderCount();
   const total=num(currentAccrualAggregate().body_accrual_total);
-  const paymentRows=billingPaymentRows();
+  const clientPaymentCount=num(bodyCatalogModel?.summary?.billing_payment_count);
   const noKtuCards=groups.noKtu.map(w=>bodyRepairCatalogCard(w,null,accruedMap)).join('');
   const noKtuSection='<section class="body-order-group no-ktu">'+bodyRepairGroupHeading('Без КТУ',groups.noKtu.length,'КТУ кузовщиков не назначен')+(noKtuCards?'<div class="body-order-list">'+noKtuCards+'</div>':'<div class="body-group-empty">Нет заказ-нарядов без КТУ</div>')+'</section>';
   const monthSections=groups.monthGroups.map(group=>{
@@ -523,7 +993,7 @@ function renderBodyRepairWorkOrders(){
     return '<section class="body-order-group">'+bodyRepairGroupHeading(title,group.items.length)+'<div class="body-order-list">'+cards+'</div></section>';
   }).join('');
   $('content').innerHTML=bodyRepairHeader('Кузовные заказ-наряды')
-    +'<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по кузовному</span><strong>'+rub(total)+'</strong></div><div class="body-summary-card"><span>Заказ-наряды</span><strong>'+uniqueCount+'</strong></div><button type="button" class="body-summary-card link client-payments" data-body-client-payments><span>Оплаты клиентов · по дате оплаты</span><strong>'+paymentRows.length+'</strong>'+bodyWorkOrderChevron()+'</button></div>'
+    +'<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по кузовному</span><strong>'+rub(total)+'</strong></div><div class="body-summary-card"><span>Заказ-наряды</span><strong>'+uniqueCount+'</strong></div><button type="button" class="body-summary-card link client-payments" data-body-client-payments><span>Оплаты клиентов · по дате оплаты</span><strong>'+clientPaymentCount+'</strong>'+bodyWorkOrderChevron()+'</button></div>'
     +'<div class="body-register-heading"><h2>Заказ-наряды</h2><span>'+esc(workOrderCountLabel(uniqueCount))+'</span></div>'
     +noKtuSection+monthSections
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
@@ -697,7 +1167,7 @@ function bindPaymentCommon(){
 }
 function renderPayments(){
   const rows=paymentRowsFiltered(),summary=paymentSummary(),stamp=paymentStamp();
-  $('content').innerHTML='<div class="payment-sticky"><div class="payment-heading"><button type="button" class="payment-back" data-payments-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>Выплаты</h1><div class="payment-snapshot"><span class="payment-snapshot-dot"></span>Данные на '+esc(stamp)+'</div></div>'+paymentAggregateChip()+paymentSummaryCards(summary)+'</div>'+paymentFiltersPanel()+'<div class="payment-register-heading"><h2>Реестр выплат</h2><span>'+esc(recordCountLabel(rows.length))+'</span></div>'+(rows.length?'<div class="payment-register"><div class="payment-register-head general"><span>Сотрудник</span><span>Дата</span><span>Тип</span><span style="text-align:right">Сумма</span><span>Статус</span><span></span></div>'+rows.map(paymentRowGeneral).join('')+'</div>':'<div class="payment-empty">Нет выплат для выбранных фильтров</div>')+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
+  $('content').innerHTML='<div class="payment-sticky"><div class="payment-heading"><button type="button" class="payment-back" data-payments-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>Выплаты</h1><div class="payment-snapshot"><span class="payment-snapshot-dot"></span>Данные на '+esc(stamp)+'</div></div>'+paymentAggregateChip()+paymentSummaryCards(summary)+'</div>'+paymentFiltersPanel()+'<div class="payment-register-heading"><h2>Реестр выплат</h2><span>'+esc(recordCountLabel(paymentModel?.summary?.total_count??rows.length))+'</span></div>'+(rows.length?'<div class="payment-register"><div class="payment-register-head general"><span>Сотрудник</span><span>Дата</span><span>Тип</span><span style="text-align:right">Сумма</span><span>Статус</span><span></span></div>'+rows.map(paymentRowGeneral).join('')+'</div>':'<div class="payment-empty">Нет выплат для выбранных фильтров</div>')+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
   document.querySelector('[data-payments-back]')?.addEventListener('click',()=>history.back());
   document.querySelectorAll('[data-payemp]').forEach(b=>b.onclick=()=>push({...state,view:'payment_employee',employee_id:Number(b.dataset.payemp),payment_id:null}));
   bindPaymentCommon();
@@ -705,7 +1175,7 @@ function renderPayments(){
 function renderPaymentEmployee(){
   const rows=paymentRowsFiltered(state.employee_id),summary=paymentSummary(state.employee_id),stamp=paymentStamp();
   const person=staffById.get(Number(state.employee_id)),name=shortName(person?.fio_full||('Сотрудник #'+state.employee_id));
-  $('content').innerHTML='<div class="payment-sticky"><div class="payment-heading employee"><button type="button" class="payment-back" data-payment-employee-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>'+esc(name)+'</h1><span class="payment-divider"></span><div class="payment-snapshot"><span class="payment-snapshot-dot"></span>Данные на '+esc(stamp)+'</div></div>'+paymentAggregateChip()+paymentSummaryCards(summary)+'</div>'+paymentFiltersPanel()+'<div class="payment-register-heading"><h2>Реестр выплат</h2><span>'+esc(recordCountLabel(rows.length))+'</span></div>'+(rows.length?'<div class="payment-register"><div class="payment-register-head employee"><span>Дата</span><span>Тип</span><span style="text-align:right">Сумма</span><span>Статус</span><span></span></div>'+rows.map(paymentRowEmployee).join('')+'</div>':'<div class="payment-empty">Нет выплат сотрудника для выбранных фильтров</div>')+'<button type="button" class="payment-back-float" data-payment-employee-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
+  $('content').innerHTML='<div class="payment-sticky"><div class="payment-heading employee"><button type="button" class="payment-back" data-payment-employee-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>'+esc(name)+'</h1><span class="payment-divider"></span><div class="payment-snapshot"><span class="payment-snapshot-dot"></span>Данные на '+esc(stamp)+'</div></div>'+paymentAggregateChip()+paymentSummaryCards(summary)+'</div>'+paymentFiltersPanel()+'<div class="payment-register-heading"><h2>Реестр выплат</h2><span>'+esc(recordCountLabel(paymentModel?.summary?.total_count??rows.length))+'</span></div>'+(rows.length?'<div class="payment-register"><div class="payment-register-head employee"><span>Дата</span><span>Тип</span><span style="text-align:right">Сумма</span><span>Статус</span><span></span></div>'+rows.map(paymentRowEmployee).join('')+'</div>':'<div class="payment-empty">Нет выплат сотрудника для выбранных фильтров</div>')+'<button type="button" class="payment-back-float" data-payment-employee-back aria-label="Назад"><svg viewBox="0 0 24 24" fill="none"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
   document.querySelectorAll('[data-payment-employee-back]').forEach(b=>b.onclick=()=>history.back());
   document.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>push({...state,view:'payment',payment_id:Number(b.dataset.pay)}));
   bindPaymentCommon();
@@ -714,23 +1184,23 @@ function renderPaymentDetail(){const p=payments.find(x=>Number(x.id)===Number(st
 function balanceSelection(){
   const selected=periods.filter(p=>monthKey(p.year,p.month)>=state.rangeStart&&monthKey(p.year,p.month)<=state.rangeEnd)
     .sort((a,b)=>(a.year-b.year)||(a.month-b.month));
-  const latest=selected.at(-1),ids=new Set(selected.map(p=>Number(p.id)));
-  const rows=balances.filter(r=>ids.has(Number(r.reporting_period_id)));
-  const flows=new Map();
-  rows.forEach(r=>{
-    const id=Number(r.staff_member_id),x=flows.get(id)||{accrual:0,payment:0};
-    x.accrual+=num(r.accrual_total);
-    x.payment+=num(r.payment_total);
-    flows.set(id,x);
-  });
-  const lastRows=latest?balances.filter(r=>Number(r.reporting_period_id)===Number(latest.id)):[];
-  const records=lastRows.map(r=>({...r,flow:flows.get(Number(r.staff_member_id))||{accrual:0,payment:0}}))
-    .filter(r=>r.flow.accrual!==0||r.flow.payment!==0);
-  const rank={to_pay:0,settled:1,overpaid:2};
-  records.sort((a,b)=>(rank[a.settlement_state]??3)-(rank[b.settlement_state]??3)
-    ||num(b.closing_balance)-num(a.closing_balance)
-    ||String(a.fio_full||'').localeCompare(String(b.fio_full||''),'ru'));
-  return {selected,latest,rows,records,summary:latest?summaries.find(r=>Number(r.reporting_period_id)===Number(latest.id)):null,flows};
+  const latest=selected.at(-1);
+  const records=(statementModel?.items||[]).map(r=>({
+    ...r,
+    flow:{accrual:num(r.accrual_total),payment:num(r.payment_total)}
+  }));
+  const flows=new Map(records.map(r=>[
+    Number(r.staff_member_id),
+    {accrual:num(r.accrual_total),payment:num(r.payment_total)}
+  ]));
+  return {
+    selected,
+    latest,
+    rows:balances,
+    records,
+    summary:statementModel?.summary||null,
+    flows
+  };
 }
 function balanceStateClass(v){return ['to_pay','overpaid','settled'].includes(v)?v:'settled'}
 function balanceBindFilter(){
@@ -749,8 +1219,8 @@ function openBalanceEmployee(id){
 function renderBalance(){
   if(Number(data.version)<8){$('content').innerHTML=empty('Для ведомости требуется обновлённый payload');return}
   const model=balanceSelection();
-  const paid=model.selected.reduce((sum,p)=>sum+num(summaries.find(r=>Number(r.reporting_period_id)===Number(p.id))?.payment_total),0);
-  const paymentCount=model.rows.reduce((sum,r)=>sum+num(r.payment_count),0);
+  const paid=num(statementModel?.flow?.payment_total);
+  const paymentCount=num(statementModel?.flow?.payment_count);
   const payable=model.summary?.payable_total, payableCount=model.summary?.payable_employee_count;
   const rows=model.records.map(r=>{
     const id=Number(r.staff_member_id),name=shortName(staffById.get(id)?.fio_full||r.fio_full);
@@ -758,7 +1228,7 @@ function renderBalance(){
   }).join('');
   $('content').innerHTML='<div class="balance-summary-grid"><div class="balance-summary-card"><div class="balance-summary-head"><span>Выплачено</span><span class="balance-summary-badge">'+paymentCount+'</span></div><div class="balance-summary-value">'+rub(paid)+'</div></div>'
     +'<div class="balance-summary-card payable"><div class="balance-summary-head"><span>К выплате</span><span class="balance-summary-badge">'+(payableCount??0)+'</span></div><div class="balance-summary-value">'+(payable==null?'—':rub(payable))+'</div></div></div>'
-    +'<div class="balance-register-sticky"><div class="balance-register-heading"><h2>Ведомость</h2><span class="balance-record-count">'+esc(recordCountLabel(model.records.length))+'</span>'+rangeChip()+'</div>'
+    +'<div class="balance-register-sticky"><div class="balance-register-heading"><h2>Ведомость</h2><span class="balance-record-count">'+esc(recordCountLabel(statementModel?.page?.total_count??model.records.length))+'</span>'+rangeChip()+'</div>'
     +'<div class="balance-register-grid balance-register-head"><span>Начислено, руб.</span><span>Выплачено, руб.</span><span>К выплате, руб.</span><span></span></div></div>'
     +(model.records.length?'<div class="balance-register">'+rows+'</div>':empty('Нет данных за выбранный период'))
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
@@ -810,6 +1280,64 @@ function renderBalanceMonth(){
 function renderSummary(){const ids=new Set(selectedIds()),rows=summaries.filter(r=>ids.has(Number(r.reporting_period_id))).sort((a,b)=>(a.reporting_year-b.reporting_year)||(a.reporting_month-b.reporting_month)),latest=rows.at(-1),flowAcc=rows.reduce((s,r)=>s+num(r.accrual_total),0),flowPay=rows.reduce((s,r)=>s+num(r.payment_total),0);$('content').innerHTML=hero('Общий баланс к выплате',`<span class="${signClass(latest?.balance_to_pay)}">${rub(latest?.balance_to_pay)}</span>`,rows.length?periodLabel(latest.reporting_period_id):'—','последний выбранный месяц',[['Начислено',rub(flowAcc)],['Выплачено',rub(flowPay)],['Месяцев',String(rows.length)]])+`<div class="section-title"><h2>По месяцам</h2><span>канонический summary</span></div>`+(rows.length?`<div class="list">${rows.map(r=>`<button class="summary-card item" data-summary="${r.reporting_period_id}"><div class="summary-head"><div class="summary-month">${periodLabel(r.reporting_period_id,true)}</div><div class="summary-balance ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="summary-grid"><div class="summary-cell"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="summary-cell"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="summary-cell"><span>Входящий</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="summary-cell"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div></button>`).join('')}</div>`:empty());document.querySelectorAll('[data-summary]').forEach(b=>b.onclick=()=>push({...state,view:'summary_month',reporting_period_id:Number(b.dataset.summary)}))}
 function renderSummaryMonth(){const r=summaries.find(x=>Number(x.reporting_period_id)===Number(state.reporting_period_id));if(!r){$('content').innerHTML=empty();return}$('content').innerHTML=`<div class="detail-head"><div><h1>${periodLabel(r.reporting_period_id,true)}</h1><p>Общий баланс Staff Cost</p></div><div class="detail-total ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="detail-grid"><div class="detail-box"><span>Входящий баланс</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="detail-box"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="detail-box"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="detail-box"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div><div class="source-row"><div class="source-name">Итоговый баланс</div><div class="source-val ${signClass(r.closing_balance)}">${rub(r.closing_balance)}</div></div>`}
 function renderBody(){if(state.section==='accruals'){if(state.view==='body_repair_accruals')return renderBodyRepairAccruals();if(state.view==='body_repair_work_orders')return renderBodyRepairWorkOrders();if(state.view==='billing_payments')return renderBillingPayments();if(state.view==='employee')return renderAccrualEmployee();if(state.view==='source')return renderAccrualSource();if(state.view==='repair_positions')return renderAccrualRepairPositions();return renderAccruals()}if(state.section==='payments'){if(state.view==='payment_employee')return renderPaymentEmployee();if(state.view==='payment')return renderPaymentDetail();return renderPayments()}if(state.section==='balance'){if(state.view==='employee_balance')return renderBalanceEmployee();if(state.view==='balance_month')return renderBalanceMonth();return renderBalance()}if(state.section==='summary'){if(state.view==='summary_month')return renderSummaryMonth();return renderSummary()}state.section='accruals';state.view='list';renderAccruals()}
-function render(){renderChrome();renderBody();renderFilter()}
-window.addEventListener('popstate',e=>{if(e.state?.staffCost){state={...initial,...e.state};render();if(accrualListScroll&&state.section==='accruals'&&state.view==='list'&&state.depth===accrualListScroll.depth){const saved=accrualListScroll;requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='list'&&state.depth===saved.depth){setAccrualScroll(saved.top,saved.contentTop);if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;accrualListScroll=null}})}else if(accrualListScroll&&state.section==='accruals'&&state.view==='employee'){setAccrualScroll(0);requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='employee')setAccrualScroll(0)})}if(balanceListScroll&&state.section==='balance'&&state.view==='list'&&state.depth===balanceListScroll.depth){const saved=balanceListScroll;requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='list'&&state.depth===saved.depth){setAccrualScroll(saved.top,saved.contentTop);if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;balanceListScroll=null}})}else if(balanceListScroll&&state.section==='balance'&&state.view==='employee_balance'){setAccrualScroll(0);requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='employee_balance')setAccrualScroll(0)})}}});history.replaceState({staffCost:true,...state},'');window.StaffCostDashboard={getState:()=>({...state}),render,back:()=>history.back()};document.body.classList.remove('app-boot');render();
+let renderEpoch=0;
+async function render(){
+  const token=++renderEpoch;
+  continuationObserver?.disconnect();
+  continuationObserver=null;
+  renderChrome();
+  renderFilter();
+  try{
+    await ensureViewData();
+  }catch(error){
+    console.error('staff_cost_view_load_failed',{
+      section:state.section,
+      view:state.view,
+      message:error instanceof Error?error.message:String(error)
+    });
+    if(token===renderEpoch)$('content').innerHTML=empty('Не удалось загрузить данные');
+    return;
+  }
+  if(token!==renderEpoch)return;
+  renderChrome();
+  renderBody();
+  renderFilter();
+  installCurrentContinuation();
+  queueMicrotask(prefetchPrimaryViews);
+}
+window.addEventListener('popstate',async e=>{
+  if(!e.state?.staffCost)return;
+  state={...initial,...e.state};
+  await render();
+  if(accrualListScroll&&state.section==='accruals'&&state.view==='list'&&state.depth===accrualListScroll.depth){
+    const saved=accrualListScroll;
+    requestAnimationFrame(()=>{
+      if(state.section==='accruals'&&state.view==='list'&&state.depth===saved.depth){
+        setAccrualScroll(saved.top,saved.contentTop);
+        if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;
+        accrualListScroll=null;
+      }
+    });
+  }else if(accrualListScroll&&state.section==='accruals'&&state.view==='employee'){
+    setAccrualScroll(0);
+    requestAnimationFrame(()=>{if(state.section==='accruals'&&state.view==='employee')setAccrualScroll(0)});
+  }
+  if(balanceListScroll&&state.section==='balance'&&state.view==='list'&&state.depth===balanceListScroll.depth){
+    const saved=balanceListScroll;
+    requestAnimationFrame(()=>{
+      if(state.section==='balance'&&state.view==='list'&&state.depth===saved.depth){
+        setAccrualScroll(saved.top,saved.contentTop);
+        if('scrollRestoration' in history)history.scrollRestoration=saved.restoration;
+        balanceListScroll=null;
+      }
+    });
+  }else if(balanceListScroll&&state.section==='balance'&&state.view==='employee_balance'){
+    setAccrualScroll(0);
+    requestAnimationFrame(()=>{if(state.section==='balance'&&state.view==='employee_balance')setAccrualScroll(0)});
+  }
+});
+history.replaceState({staffCost:true,...state},'');
+window.StaffCostDashboard={getState:()=>({...state}),render,back:()=>history.back()};
+await render();
+document.body.classList.remove('app-boot');
 }
