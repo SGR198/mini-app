@@ -12,6 +12,7 @@
   },
   "vars": {
     "SUPABASE_STAFF_COST_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp",
+    "SUPABASE_MINIAPP_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/miniapp-api",
     "SUPABASE_ALLOWED_ORIGIN": "https://database-miniapp.loftauto-data.workers.dev"
   },
   "observability": {
