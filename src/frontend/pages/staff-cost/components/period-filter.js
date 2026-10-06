@@ -1,5 +1,5 @@
-import { cap, monthNames } from "../../shared/ui/format.js";
-import { periodsForQuarter } from "../../shared/ui/periods.js";
+import { cap, monthNames } from "../../../shared/ui/format.js";
+import { periodsForQuarter } from "../../../shared/ui/periods.js";
 
 export function renderPeriodFilter({
   periods,year,quarter,periodIds,onYear,onQuarter,onMonth,onQuarterAll
