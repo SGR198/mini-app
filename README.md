@@ -124,6 +124,7 @@ feature/* -> PR -> dev
 ```
 
 `dev` Preview is an integration runtime, not a second source tree or a second Worker.
+Cloudflare Previews are enabled for this Worker; pushes to non-production branches create/update preview builds.
 It uses the same `database-miniapp` Worker definition with Preview configuration.
 Business/backend data continues to come from the canonical Supabase Mini App API.
 
