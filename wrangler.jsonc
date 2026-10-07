@@ -4,6 +4,7 @@
   "main": "./src/index.js",
   "compatibility_date": "2026-10-05",
   "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./public",
     "run_worker_first": [
@@ -14,6 +15,13 @@
     "SUPABASE_STAFF_COST_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp",
     "SUPABASE_MINIAPP_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/miniapp-api",
     "SUPABASE_ALLOWED_ORIGIN": "https://database-miniapp.loftauto-data.workers.dev"
+  },
+  "previews": {
+    "vars": {
+      "SUPABASE_STAFF_COST_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/staff-cost-miniapp",
+      "SUPABASE_MINIAPP_URL": "https://sfzacmpcpjviguhustym.supabase.co/functions/v1/miniapp-api",
+      "SUPABASE_ALLOWED_ORIGIN": "https://database-miniapp.loftauto-data.workers.dev"
+    }
   },
   "observability": {
     "enabled": true
