@@ -107,6 +107,26 @@ The native page uses only `/api/miniapp`.
 
 The old route/runtime is removed only in the follow-up cleanup issue after production verification.
 
+## DEV / production runtime
+
+```text
+feature/* -> PR -> dev
+                |
+                +-> Cloudflare Preview: dev
+                    https://dev-database-miniapp.loftauto-data.workers.dev
+                    -> Telegram DEV Mini App
+                |
+                +-> verified -> PR dev -> main
+                                  |
+                                  +-> production deploy
+                                      https://database-miniapp.loftauto-data.workers.dev
+                                      -> Telegram production Mini App
+```
+
+`dev` Preview is an integration runtime, not a second source tree or a second Worker.
+It uses the same `database-miniapp` Worker definition with Preview configuration.
+Business/backend data continues to come from the canonical Supabase Mini App API.
+
 ## Repository workflow
 
 ```text

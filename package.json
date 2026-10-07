@@ -7,6 +7,7 @@
     "build:frontend": "node scripts/build-frontend.mjs",
     "build": "npm run build:frontend && npm run check:staff-cost-parity && wrangler deploy --dry-run",
     "deploy": "npm run build:frontend && npm run check:staff-cost-parity && wrangler deploy",
+    "preview:dev": "npm run build:frontend && npm run check:staff-cost-parity && wrangler preview --name dev",
     "check:staff-cost-parity": "node scripts/check-staff-cost-parity.mjs"
   },
   "devDependencies": {

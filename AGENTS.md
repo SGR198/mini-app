@@ -18,6 +18,9 @@ Rules:
 - Production changes enter `main` only through a release PR `dev -> main`.
 - Cloudflare production deploy is triggered only by changes merged into `main`.
 - Development verification happens before the release PR.
+- `dev` is verified through the stable Cloudflare Worker Preview `dev-database-miniapp.loftauto-data.workers.dev`.
+- Telegram DEV Mini App points to the stable `dev` Preview; Telegram production Mini App points to the production Worker URL.
+- Non-production branches must use Worker Previews and must never deploy/promote production.
 - Use Cloudflare Workers Static Assets for the Mini App frontend.
 - Keep business data and canonical domain logic in Supabase.
 - Do not move API/runtime logic from Supabase to Cloudflare unless a separate issue explicitly requires it.
