@@ -759,7 +759,18 @@ function installCurrentContinuation(){
 
 function periodLabel(id,full=false){const p=periodById.get(Number(id));return p?`${full?cap(monthNames[p.month-1]):monthShort[p.month-1]} ’${String(p.year).slice(-2)}`:'—'}
 function signClass(v){return num(v)>0?'positive':num(v)<0?'negative':'neutral'}
-function push(next){state={...next,depth:(state.depth||0)+1};history.pushState({staffCost:true,...state},'');render()}
+const telegramWebApp=globalThis?.Telegram?.WebApp;
+const telegramBackButton=telegramWebApp?.BackButton;
+function syncTelegramBackButton(){
+  if(!telegramBackButton)return;
+  if(Number(state.depth)>0)telegramBackButton.show?.();
+  else telegramBackButton.hide?.();
+}
+function handleTelegramBack(){
+  if(Number(state.depth)>0)history.back();
+}
+telegramBackButton?.onClick?.(handleTelegramBack);
+function push(next){state={...next,depth:(state.depth||0)+1};history.pushState({staffCost:true,...state},'');syncTelegramBackButton();render()}
 let accrualListScroll=null;
 function setAccrualScroll(top,contentTop=0){
   const root=document.scrollingElement||document.documentElement;
@@ -1328,6 +1339,7 @@ async function render(){
   const token=++renderEpoch;
   continuationObserver?.disconnect();
   continuationObserver=null;
+  syncTelegramBackButton();
   renderChrome();
   renderFilter();
   try{
@@ -1351,6 +1363,7 @@ async function render(){
 window.addEventListener('popstate',async e=>{
   if(!e.state?.staffCost)return;
   state={...initial,...e.state};
+  syncTelegramBackButton();
   await render();
   if(accrualListScroll&&state.section==='accruals'&&state.view==='list'&&state.depth===accrualListScroll.depth){
     const saved=accrualListScroll;
@@ -1380,6 +1393,7 @@ window.addEventListener('popstate',async e=>{
   }
 });
 history.replaceState({staffCost:true,...state},'');
+syncTelegramBackButton();
 window.StaffCostDashboard={getState:()=>({...state}),render,back:()=>history.back()};
 await render();
 document.body.classList.remove('app-boot');
