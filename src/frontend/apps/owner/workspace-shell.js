@@ -17,7 +17,8 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     ${workspaces.map((route)=>`<button type="button" role="menuitem" data-workspace="${route.page.code}">${route.page.name}</button>`).join("")}
   </div>`;
 
-  let activeWorkspace="staff_cost";\n  const trigger=host.querySelector(".workspace-trigger");
+  let activeWorkspace="staff_cost";
+  const trigger=host.querySelector(".workspace-trigger");
   const menu=host.querySelector(".workspace-menu");
 
   function routeFor(path){
@@ -27,7 +28,8 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
 
   async function activateRoute(route,{replace=true}={}){
     await onActivate(route);
-    activeWorkspace=route.page.code;\n    host.dataset.workspace=route.page.code;
+    activeWorkspace=route.page.code;
+    host.dataset.workspace=route.page.code;
     host.querySelectorAll("[data-workspace]").forEach((button)=>{
       button.classList.toggle("active",button.dataset.workspace===route.page.code);
     });
