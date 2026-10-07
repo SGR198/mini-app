@@ -1,6 +1,6 @@
 import { esc, formatStamp, rub, shortName } from "../../../shared/ui/format.js";
 
-export function renderAccrualsView(root,{data,onEmployee,onBodyRepair,onLoadMore}){
+export function renderAccrualsView(root,{data,onEmployee,onBodyRepair,onMechanicalRepair,onLoadMore}){
   const s=data?.summary||{};
   const items=Array.isArray(data?.items)?data.items:[];
   root.innerHTML=
@@ -8,7 +8,7 @@ export function renderAccrualsView(root,{data,onEmployee,onBodyRepair,onLoadMore
     +'<div class="hero-side"><b>'+Number(s.employee_count||0)+'</b><span>сотрудников</span></div></div>'
     +'<div class="submetrics"><button type="button" class="metric metric-clickable" data-body-repair><span>🔨 Кузовной</span><b>'+rub(s.body_accrual_total)+'</b></button>'
     +'<div class="metric"><span>👤 Приёмщик</span><b>'+rub(s.service_advisor_accrual_total)+'</b></div>'
-    +'<div class="metric"><span>🔧 Слесарный</span><b>'+rub(s.mechanical_accrual_total)+'</b></div></div></div>'
+    +'<button type="button" class="metric metric-clickable" data-mechanical-repair><span>🔧 Слесарный</span><b>'+rub(s.mechanical_accrual_total)+'</b></button></div></div>'
     +'<div class="section-title"><h2>Сотрудники</h2><span>'+Number(data?.page?.total_count||0)+' строк</span></div>'
     +(items.length?'<div class="list">'+items.map((item)=>
       '<button class="item" data-employee="'+item.staff_member_id+'"><div class="item-top"><div class="item-main"><div class="name">'+esc(shortName(item.fio_full))+'</div></div>'
@@ -18,6 +18,7 @@ export function renderAccrualsView(root,{data,onEmployee,onBodyRepair,onLoadMore
     +'<div class="native-meta">Данные на '+esc(formatStamp(data?.generated_at))+'</div>';
 
   root.querySelector("[data-body-repair]")?.addEventListener("click",onBodyRepair);
+  root.querySelector("[data-mechanical-repair]")?.addEventListener("click",onMechanicalRepair);
   root.querySelectorAll("[data-employee]").forEach((button)=>{
     button.onclick=()=>onEmployee(Number(button.dataset.employee));
   });
