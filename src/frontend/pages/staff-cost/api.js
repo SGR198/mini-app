@@ -73,6 +73,11 @@ export const staffCostApi={
       source_item_id:Number(sourceItemId)
     },{force}),
 
+  mechanicalRepairAccruals:(periodIds,{force=false}={})=>
+    request("staff_cost.mechanical_repair_accruals",{
+      period_ids:ids(periodIds)
+    },{force}),
+
   bodyRepairAccruals:(periodIds,{force=false}={})=>
     request("staff_cost.body_repair_accruals",{
       period_ids:ids(periodIds)
