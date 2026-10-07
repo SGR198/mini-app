@@ -147,7 +147,7 @@ function quarterRangeText(){const a=state.rangeStart,b=state.rangeEnd,q1=Math.fl
 function monthRangeText(){const a=state.rangeStart,b=state.rangeEnd;return cap(monthNames[monthOf(a)-1])+(a===b?'':' – '+cap(monthNames[monthOf(b)-1]))}
 function chooseRange(a,b){
   if(state.section==='accruals'&&state.view==='employee')replace({...state,rangeStart:a,rangeEnd:b,employeeAllPeriods:false});
-  else if(state.section==='accruals'&&(state.view==='body_repair_accruals'||state.view==='mechanical_repair_accruals'||state.view==='body_repair_work_orders'||state.view==='mechanical_repair_accruals'))replace({...state,rangeStart:a,rangeEnd:b});
+  else if(state.section==='accruals'&&(state.view==='body_repair_accruals'||state.view==='mechanical_repair_accruals'||state.view==='body_repair_work_orders'))replace({...state,rangeStart:a,rangeEnd:b});
   else if(state.section==='payments'&&state.view==='payment_employee')replace({...state,rangeStart:a,rangeEnd:b,payment_id:null});
   else if(state.section==='payments'&&state.view==='list')replace({...state,rangeStart:a,rangeEnd:b,payment_id:null});
   else if(state.section==='balance'&&state.view==='employee_balance')replace({...state,rangeStart:a,rangeEnd:b});
@@ -181,7 +181,7 @@ function filterSummary(open=false){
   return '<div class="filter-summary">'+labels.map(([tab,title,value,icon])=>'<button class="filter-cell '+(open&&filterTab===tab?'active':'')+' '+(selected===tab?'selected':'')+' '+(!cleared&&tab==='month'&&state.rangeEnd>state.rangeStart?'month-range':'')+'" data-ftab="'+tab+'" aria-label="'+title+': '+esc(value)+'">'+icon+'<span class="filter-text">'+esc(value)+'</span>'+chevronIcon()+'</button>').join('')+'</div>';
 }
 function renderFilter(){
-  const accrualActive=state.section==='accruals'&&(state.view==='list'||state.view==='employee'||state.view==='source'||state.view==='repair_positions'||state.view==='body_repair_accruals'||state.view==='body_repair_work_orders');
+  const accrualActive=state.section==='accruals'&&(state.view==='list'||state.view==='employee'||state.view==='source'||state.view==='repair_positions'||state.view==='body_repair_accruals'||state.view==='mechanical_repair_accruals'||state.view==='body_repair_work_orders');
   const paymentActive=state.section==='payments'&&(state.view==='list'||state.view==='payment_employee');
   const balanceActive=state.section==='balance';
   const active=accrualActive||paymentActive||balanceActive;
