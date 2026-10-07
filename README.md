@@ -141,3 +141,5 @@ feature/*
 See `AGENTS.md`.
 
 Canonical backend contract and ADR live in `SGR198/database`.
+
+Cloudflare Worker Preview URLs are explicitly enabled (`preview_urls: true`); the stable `dev` Preview is the Telegram DEV runtime.
