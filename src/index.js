@@ -12,7 +12,7 @@ function jsonError(status, message, extraHeaders = {}) {
   });
 }
 
-async function proxyJsonPost(request, upstreamUrl, upstreamOrigin) {
+async function proxyJsonPost(request, upstreamUrl, upstreamOrigin, appCode = null) {
   if (request.method !== "POST") {
     return jsonError(405, "method_not_allowed", { Allow: "POST" });
   }
@@ -22,13 +22,22 @@ async function proxyJsonPost(request, upstreamUrl, upstreamOrigin) {
   }
 
   try {
+    let body = request.body;
+    if (appCode) {
+      const payload = await request.json();
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return jsonError(400, "invalid_json_payload");
+      }
+      body = JSON.stringify({ ...payload, app: appCode });
+    }
+
     const upstream = await fetch(upstreamUrl, {
       method: "POST",
       headers: {
         "Content-Type": request.headers.get("Content-Type") || "application/json",
         Origin: upstreamOrigin,
       },
-      body: request.body,
+      body,
       redirect: "manual",
     });
 
@@ -73,6 +82,7 @@ export default {
         request,
         env.SUPABASE_MINIAPP_URL,
         env.SUPABASE_ALLOWED_ORIGIN,
+        env.MINIAPP_APP_CODE,
       );
     }
 
