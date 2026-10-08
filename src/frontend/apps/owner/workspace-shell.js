@@ -27,17 +27,19 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     if(!visible){menu.hidden=true;trigger.setAttribute("aria-expanded","false");}
   }
   setRootVisible(false);
-  window.addEventListener("staff-cost:view-state",(event)=>setRootVisible(Boolean(event.detail?.root)));
+  window.addEventListener("staff-cost:view-state",(event)=>{if(activeWorkspace==="staff_cost")setRootVisible(Boolean(event.detail?.root));});
+  window.addEventListener("balance:view-state",(event)=>{if(activeWorkspace==="balance")setRootVisible(Boolean(event.detail?.root));});
 
   function routeFor(path){
     const normalized=normalizePath(path);
+    if(normalized.startsWith("/balance/month/"))return routes.find((route)=>route.page.code==="balance")||defaultRoute;
     return routes.find((route)=>normalizePath(route.path)===normalized)||defaultRoute;
   }
 
   async function activateRoute(route,{replace=true}={}){
     if(route.page.code!=="staff_cost")setRootVisible(route.page.code==="balance");
     await onActivate(route);
-    if(route.page.code==="balance")setRootVisible(true);
+    if(route.page.code==="balance")setRootVisible(!globalThis.location?.pathname.startsWith("/balance/month/"));
     if(route.page.code==="staff_cost"){
       const view=window.StaffCostDashboard?.getState?.();
       setRootVisible(Boolean(view&&view.section==="accruals"&&view.view==="list"));
@@ -49,7 +51,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     });
     menu.hidden=true;
     trigger.setAttribute("aria-expanded","false");
-    const target=route.page.code==="staff_cost"?"/":route.path;
+    const target=route.page.code==="staff_cost"?"/":route.page.code==="balance"&&globalThis.location?.pathname.startsWith("/balance/month/")?globalThis.location.pathname:route.path;
     if(globalThis.location?.pathname!==target){
       const state={...(history.state||{}),miniappWorkspace:route.page.code};
       if(replace) history.replaceState(state,"",target);
@@ -66,7 +68,10 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     const button=event.target.closest("[data-workspace]");
     if(!button) return;
     const route=workspaces.find((item)=>item.page.code===button.dataset.workspace);
-    if(route) activateRoute(route,{replace:true});
+    if(route){
+      if(route.page.code==="balance"&&globalThis.location?.pathname.startsWith("/balance/month/"))history.replaceState({...history.state,balanceMonth:null},"","/balance");
+      activateRoute(route,{replace:true});
+    }
   });
 
   return {
