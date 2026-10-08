@@ -134,7 +134,7 @@ async function loadRoute(){
  const r=route();
  currentId=r.id;currentSource=r.source;
  if(!currentId){renderRoot();return;}
- const known=monthCache.get(currentId)?.data||periods.find(p=>Number(p.reporting_period_id)===currentId);
+ const known=monthCache.get(currentId)?.data;
  if(known){month=known;periodById.set(currentId,known);}
  if(currentSource){
    // Source data does not depend on a fresh month request. Fetch detail directly.
