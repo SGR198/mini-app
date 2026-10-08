@@ -9,4 +9,7 @@
 .balance-placeholder-card p{margin:0;color:#666;line-height:1.45}
 .balance-placeholder-kicker{font-size:13px;color:#777;text-transform:uppercase;letter-spacing:.08em}
 
-body.workspace-root-switcher .hero-top{padding-right:46px}
+body.workspace-root-switcher.accrual-list .hero{clip-path:polygon(0 0,calc(100% - 60px) 0,calc(100% - 60px) 58px,100% 58px,100% 100%,0 100%)}
+body.workspace-root-switcher.accrual-list .hero-top{padding-right:46px}
+body.workspace-root-switcher #workspace-switcher{top:calc(env(safe-area-inset-top,0px) + 10px);right:18px}
+body.workspace-root-switcher #workspace-switcher .workspace-trigger{background:#fff;border-radius:15px}

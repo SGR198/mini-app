@@ -35,8 +35,13 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   }
 
   async function activateRoute(route,{replace=true}={}){
-    if(route.page.code!=="staff_cost")setRootVisible(false);
+    if(route.page.code!=="staff_cost")setRootVisible(route.page.code==="balance");
     await onActivate(route);
+    if(route.page.code==="balance")setRootVisible(true);
+    if(route.page.code==="staff_cost"){
+      const view=window.StaffCostDashboard?.getState?.();
+      setRootVisible(Boolean(view&&view.section==="accruals"&&view.view==="list"));
+    }
     activeWorkspace=route.page.code;
     host.dataset.workspace=route.page.code;
     host.querySelectorAll("[data-workspace]").forEach((button)=>{
