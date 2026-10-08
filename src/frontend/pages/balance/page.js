@@ -25,11 +25,16 @@ const periodById=new Map();
 const employees=new Map();
 let periods=[],active=false,seq=0,currentId=null,currentSource=null,rows=[],totalCount=0,offset=0,initialized=false;
 let root=null,month=null;
+const monthCache=new Map();
+const sourceCache=new Map();
+const CACHE_TTL_MS=60_000;
+let rootLoadedAt=0;
+const cached=(entry)=>entry&&Date.now()-entry.at<CACHE_TTL_MS?entry.data:null;
 const $=id=>root?.getElementById(id);
 const pathMonth=id=>'/balance/month/'+id;
 const pathSource=(id,code)=>pathMonth(id)+'/source/'+code;
 const route=()=>{const p=location.pathname.split('/').filter(Boolean);if(p[0]!=='balance')return {id:null,source:null};const id=p[1]==='month'&&/^[0-9]+$/.test(p[2]||'')?Number(p[2]):null;return {id,source:p[3]==='source'&&sourceConfig[p[4]]?p[4]:null};};
-const monthFact=()=>month||periods.find(p=>Number(p.reporting_period_id)===currentId);
+const monthFact=()=>monthCache.get(currentId)?.data||periods.find(p=>Number(p.reporting_period_id)===currentId);
 const rangeLabel=()=>periodName(monthFact());
 function setup(){
  if(initialized)return;
@@ -107,12 +112,19 @@ function renderSource(){
 }
 async function loadSource(id,source,append=false){
  const token=++seq;
+ const key=id+':'+source;
+ const cache=sourceCache.get(key);
+ if(!append&&cached(cache)){
+   rows=cache.data.rows;offset=rows.length;totalCount=cache.data.totalCount;
+   renderSource();return;
+ }
  if(!append)$('content').innerHTML=empty('Загрузка…');
  try{
    const result=await balanceApi.source(id,source,{limit:100,offset:append?offset:0});
    if(!active||token!==seq)return;
    rows=append?rows.concat(result.rows||[]):result.rows||[];
    offset=rows.length;totalCount=Number(result.total_count)||0;
+   sourceCache.set(key,{at:Date.now(),data:{rows,totalCount}});
    for(const row of rows)if(row.employee_id&&!employees.has(Number(row.employee_id)))employees.set(Number(row.employee_id),row);
    renderSource();
  }catch(err){console.error('balance_source_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить детализацию')+'<button type="button" data-retry>Повторить</button>';}
@@ -122,26 +134,36 @@ async function loadRoute(){
  const r=route();
  currentId=r.id;currentSource=r.source;
  if(!currentId){renderRoot();return;}
+ const known=monthCache.get(currentId)?.data||periods.find(p=>Number(p.reporting_period_id)===currentId);
+ if(known){month=known;periodById.set(currentId,known);}
+ if(currentSource){
+   // Source data does not depend on a fresh month request. Fetch detail directly.
+   await loadSource(currentId,currentSource);
+   return;
+ }
+ if(known){renderMonth();return;}
  $('content').innerHTML=empty('Загрузка…');
  try{
    const result=await balanceApi.month(currentId);
    if(!active||token!==seq)return;
    month=result.month;
-   periodById.set(Number(month.reporting_period_id),month);
-   if(currentSource)await loadSource(currentId,currentSource);
-   else renderMonth();
+   monthCache.set(currentId,{at:Date.now(),data:month});
+   periodById.set(currentId,month);
+   renderMonth();
  }catch(err){console.error('balance_month_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить месяц')+'<button type="button" data-retry>Повторить</button>';}
 }
 export const balancePage={
  code:'balance',name:'Баланс',
  async activate(){
    setup();active=true;staff().hidden=true;host().hidden=false;
+   if(periods.length&&Date.now()-rootLoadedAt<CACHE_TTL_MS){void loadRoute();return;}
    $('content').innerHTML=empty('Загрузка…');
    const token=++seq;
    try{
      const result=await balanceApi.root();
      if(!active||token!==seq)return;
      periods=result.periods||[];
+     rootLoadedAt=Date.now();
      periodById.clear();for(const p of periods)periodById.set(Number(p.reporting_period_id),p);
      await loadRoute();
    }catch(err){console.error('balance_root_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить баланс')+'<button type="button" data-retry>Повторить</button>';}
