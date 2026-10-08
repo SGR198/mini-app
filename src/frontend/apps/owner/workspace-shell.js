@@ -12,7 +12,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   const workspaces=routes.filter((route)=>route.workspace)
     .filter((route,index,all)=>all.findIndex((item)=>item.page.code===route.page.code)===index);
 
-  host.innerHTML=`<button class="workspace-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Настройки рабочей области"><span aria-hidden="true">⚙</span></button>
+  host.innerHTML=`<button class="workspace-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Настройки рабочей области"><svg class="workspace-gear-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9.7 2.5h4.6l.7 2.7a7.5 7.5 0 0 1 1.6.9l2.6-.8 2.3 4-1.9 1.9a8 8 0 0 1 0 1.8l1.9 1.9-2.3 4-2.6-.8a7.5 7.5 0 0 1-1.6.9l-.7 2.7H9.7L9 19a7.5 7.5 0 0 1-1.6-.9l-2.6.8-2.3-4 1.9-1.9a8 8 0 0 1 0-1.8L2.5 9.3l2.3-4 2.6.8A7.5 7.5 0 0 1 9 5.2z"/><circle cx="12" cy="12" r="3.1"/></svg></button>
   <div class="workspace-menu" role="menu" hidden>
     ${workspaces.map((route)=>`<button type="button" role="menuitem" data-workspace="${route.page.code}">${route.page.name}</button>`).join("")}
   </div>`;
