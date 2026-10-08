@@ -12,14 +12,16 @@ issue/feature branch
 
 Rules:
 
-- `dev` is the integration branch and base for issue/feature branches.
+- `dev` is the integration branch and the base for every issue/feature branch.
+- Normal development flow is mandatory: create an issue/feature branch from `dev`, open a PR back to `dev`, merge it into `dev`, then verify the integrated result in the stable DEV runtime.
 - `main` is the production source of truth.
 - Do not merge issue/feature branches directly into `main`.
-- Production changes enter `main` only through a release PR `dev -> main`.
-- Cloudflare production deploy is triggered only by changes merged into `main`.
-- Development verification happens before the release PR.
-- `dev` is verified through the stable Cloudflare Worker Preview `dev-database-miniapp.loftauto-data.workers.dev`.
-- Telegram DEV Mini App points to the stable `dev` Preview; Telegram production Mini App points to the production Worker URL.
+- The stable Cloudflare Worker Preview `dev-database-miniapp.loftauto-data.workers.dev` is the canonical DEV runtime and is opened through the Easy Prokat Telegram DEV bot.
+- Merging a PR into `dev` may automatically update the DEV Preview; this is expected and is not a production release.
+- Production is a separate, explicit release step. Never open/merge `dev -> main`, promote a Preview, or otherwise trigger a production deploy merely because DEV verification succeeded.
+- A production release requires an explicit user instruction in the current task, such as “deploy to production” or “merge dev into main”. Without that explicit instruction, stop at the verified `dev` state.
+- After explicit production approval, production changes enter `main` only through a release PR `dev -> main`; Cloudflare production deploy is then triggered by the merge into `main`.
+- Telegram production Mini App points to the production Worker URL.
 - Non-production branches must use Worker Previews and must never deploy/promote production.
 - Use Cloudflare Workers Static Assets for the Mini App frontend.
 - Keep business data and canonical domain logic in Supabase.
