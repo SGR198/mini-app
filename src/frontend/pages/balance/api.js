@@ -8,5 +8,6 @@ async function request(action,params={}){
 }
 export const balanceApi={
   root:()=>request("balance.root"),
-  month:(reportingPeriodId)=>request("balance.month",{reporting_period_id:Number(reportingPeriodId)})
+  month:(reportingPeriodId)=>request("balance.month",{reporting_period_id:Number(reportingPeriodId)}),
+  source:(reportingPeriodId,sourceCode,{limit=50,offset=0}={})=>request("balance.source",{reporting_period_id:Number(reportingPeriodId),source_code:sourceCode,limit,offset})
 };
