@@ -26,7 +26,8 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     document.body.classList.toggle("workspace-root-switcher",visible);
     if(!visible){menu.hidden=true;trigger.setAttribute("aria-expanded","false");}
   }
-  setRootVisible(false);
+  const initialStaffState=window.StaffCostDashboard && window.StaffCostDashboard.getState();
+  setRootVisible(Boolean(initialStaffState && initialStaffState.section==="accruals" && initialStaffState.view==="list"));
   window.addEventListener("staff-cost:view-state",(event)=>setRootVisible(Boolean(event.detail?.root)));
 
   function routeFor(path){
