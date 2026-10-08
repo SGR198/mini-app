@@ -1337,6 +1337,7 @@ function renderBody(){if(state.section==='accruals'){if(state.view==='mechanical
 let renderEpoch=0;
 async function render(){
   const token=++renderEpoch;
+  window.dispatchEvent(new CustomEvent("staff-cost:view-state",{detail:{root:state.section==='accruals'&&state.view==='list'}}));
   continuationObserver?.disconnect();
   continuationObserver=null;
   syncTelegramBackButton();
