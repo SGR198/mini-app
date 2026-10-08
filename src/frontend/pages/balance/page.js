@@ -94,8 +94,9 @@ function init(){
     const target=event.target.closest("button");
     if(!target)return;
     if(target.matches("[data-balance-back]")){back();return;}
+    if(target.matches("[data-balance-retry-root]")){rootData=null;void balancePage.activate();return;}
     if(target.matches("[data-balance-retry]")){const id=monthIdFromPath();if(id)void showMonth(id);return;}
-    const id=Number(target.dataset.month);
+    const id=target.hasAttribute("data-month")?Number(target.dataset.month):NaN;
     if(Number.isSafeInteger(id)&&id>0){
       history.pushState({...history.state,balanceMonth:id},"",monthPath(id));
       void showMonth(id);
