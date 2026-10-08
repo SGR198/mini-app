@@ -12,7 +12,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   const workspaces=routes.filter((route)=>route.workspace)
     .filter((route,index,all)=>all.findIndex((item)=>item.page.code===route.page.code)===index);
 
-  host.innerHTML=`<button class="workspace-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Рабочая область">⋮</button>
+  host.innerHTML=`<button class="workspace-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Настройки рабочей области"><span aria-hidden="true">⚙</span></button>
   <div class="workspace-menu" role="menu" hidden>
     ${workspaces.map((route)=>`<button type="button" role="menuitem" data-workspace="${route.page.code}">${route.page.name}</button>`).join("")}
   </div>`;
@@ -20,6 +20,14 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   let activeWorkspace="staff_cost";
   const trigger=host.querySelector(".workspace-trigger");
   const menu=host.querySelector(".workspace-menu");
+
+  function setRootVisible(visible){
+    host.hidden=!visible;
+    document.body.classList.toggle("workspace-root-switcher",visible);
+    if(!visible){menu.hidden=true;trigger.setAttribute("aria-expanded","false");}
+  }
+  setRootVisible(false);
+  window.addEventListener("staff-cost:view-state",(event)=>setRootVisible(Boolean(event.detail?.root)));
 
   function routeFor(path){
     const normalized=normalizePath(path);
