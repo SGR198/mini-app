@@ -25,3 +25,11 @@
 .balance-detail-note{color:#8c94a5;font-size:12px;text-align:center;margin-top:20px}
 .balance-loading,.balance-error,.balance-empty{max-width:560px;margin:28px auto;padding:24px;background:#fff;border-radius:18px;text-align:center;color:#66718a}
 .balance-error button{margin-left:8px;border:0;background:#e8efff;color:#315cbb;padding:9px 12px;border-radius:10px}
+
+.balance-source-link{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.balance-source-link strong{color:#344c83}
+.balance-source-count{font-size:13px;color:#7c8496;margin:0 0 14px}
+.balance-detail-row>div{display:grid;gap:5px;min-width:0}
+.balance-detail-row>div strong{font-size:14px;overflow-wrap:anywhere}
+.balance-detail-row small{color:#8b93a5;font-size:12px}
+.balance-more{width:100%;margin-top:16px;padding:14px;border:1px solid #d9e4fa;background:#eaf1ff;border-radius:14px;color:#315c9b;font:inherit;font-weight:700}
