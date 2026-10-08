@@ -185,7 +185,7 @@ function renderFilter(){
   const paymentActive=state.section==='payments'&&(state.view==='list'||state.view==='payment_employee');
   const balanceActive=state.section==='balance';
   const active=accrualActive||paymentActive||balanceActive;
-  document.body.classList.toggle('accrual-list',accrualActive);
+  document.body.classList.toggle('workspace-switcher-visible',state.section==='accruals'&&state.view==='list');\n  document.body.classList.toggle('accrual-list',accrualActive);
   document.body.classList.toggle('accrual-employee',accrualActive&&(state.view==='employee'||state.view==='source'||state.view==='repair_positions'));
   document.body.classList.toggle('payment-list',paymentActive);
   document.body.classList.toggle('payment-employee',paymentActive&&state.view==='payment_employee');
