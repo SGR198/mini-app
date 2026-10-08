@@ -1,7 +1,6 @@
 const MINIAPP_ENDPOINT = "/api/miniapp";
 
 export async function callMiniAppApi({
-  app = "owner",
   initData,
   action,
   params = {},
@@ -10,7 +9,7 @@ export async function callMiniAppApi({
   const response = await fetch(MINIAPP_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app, initData, action, params }),
+    body: JSON.stringify({ initData, action, params }),
   });
   const clientMs=performance.now()-started;
   const serverTiming=response.headers.get("Server-Timing")||"";
