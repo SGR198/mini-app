@@ -35,6 +35,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   }
 
   async function activateRoute(route,{replace=true}={}){
+    if(route.page.code!=="staff_cost")setRootVisible(false);
     await onActivate(route);
     activeWorkspace=route.page.code;
     host.dataset.workspace=route.page.code;
