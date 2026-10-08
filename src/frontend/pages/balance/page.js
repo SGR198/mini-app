@@ -180,7 +180,6 @@ export const balancePage={
       const detail=sourceRoute();
       if(detail)await showSource(detail.id,detail.source);
       else {const id=monthIdFromPath();if(id)await showMonth(id);else renderRoot();}
-      else renderRoot();
     }catch(error){
       console.error("balance_root_failed",error);
       if(active&&token===requestId&&host)host.innerHTML='<div class="balance-error">Не удалось загрузить баланс. <button type="button" data-balance-retry-root>Повторить</button></div>';
