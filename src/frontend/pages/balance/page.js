@@ -7,7 +7,7 @@ const rub=(value)=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB
 const safe=(value)=>String(value??"").replace(/[&<>"']/g,(ch)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const periodTitle=(p)=>`${months[Number(p.month)-1]||""} ${p.year}`;
 const monthPath=(id)=>`/balance/month/${id}`;
-const monthIdFromPath=()=>{const match=location.pathname.match(/^\\/balance\\/month\\/(\\d+)\\/?$/);return match?Number(match[1]):null;};
+const monthIdFromPath=()=>{const parts=location.pathname.split("/").filter(Boolean);return parts.length===3&&parts[0]==="balance"&&parts[1]==="month"&&/^[0-9]+$/.test(parts[2])?Number(parts[2]):null;};
 let rootData=null;
 const monthCache=new Map();
 let active=false;
