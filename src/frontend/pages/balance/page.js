@@ -56,7 +56,7 @@ function notify(){
 function header(title){
  $('headerTitle').textContent=title;
  $('backBtn').classList.toggle('show',!!currentId);
- $('snapshotText').textContent='Данные на '+new Date().toLocaleString('ru-RU',{timeZone:'Asia/Yekaterinburg',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')+' ЕКБ';
+ $('snapshotText').textContent='Данные из базы';
  notify();
 }
 function navigate(id,source=null){
