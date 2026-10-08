@@ -1,192 +1,150 @@
 import { balanceApi } from "./api.js";
+import { dashboardStyle } from "./dashboard-style.js";
 
-const staffHost=()=>document.getElementById("staff-cost-workspace");
-const balanceHost=()=>document.getElementById("balance-workspace");
-const months=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
-const rub=(value)=>new Intl.NumberFormat("ru-RU",{style:"currency",currency:"RUB",maximumFractionDigits:2}).format(Number(value)||0);
-const safe=(value)=>String(value??"").replace(/[&<>"']/g,(ch)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-const periodTitle=(p)=>`${months[Number(p.month)-1]||""} ${p.year}`;
-const monthPath=(id)=>`/balance/month/${id}`;
-const monthIdFromPath=()=>{const parts=location.pathname.split("/").filter(Boolean);return parts.length===3&&parts[0]==="balance"&&parts[1]==="month"&&/^[0-9]+$/.test(parts[2])?Number(parts[2]):null;};
-let rootData=null;
-const monthCache=new Map();
-let active=false;
-let requestId=0;
-let currentMonth=null;
-let initialized=false;
-
-const sources={
-  salary:{label:"Заработная плата",amount:"amount_rub",date:"payment_date",title:(r)=>r.short_name||r.full_name||"Выплата"},
-  purchase:{label:"Закупки",amount:"cost_amount_rub",date:"purchase_date",title:(r)=>r.item_name||"Закупка"},
-  body:{label:"Кузовной ремонт",amount:"cost_amount_rub",date:"upd_date",title:(r)=>"УПД №"+r.upd_body_id},
-  rental:{label:"Прокат",amount:"cost_amount_rub",date:"upd_date",title:(r)=>"УПД №"+r.upd_rental_id},
-  repayment:{label:"Погашения",amount:"amount_rub",date:"payment_date",title:(r)=>"Погашение №"+r.debit_payment_id}
+// Faithful port of dashboard.registry balance/template.html.
+// The source markup and source-detail renderers below are retained from the original.
+const host=()=>document.getElementById("balance-workspace");
+const staff=()=>document.getElementById("staff-cost-workspace");
+const monthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const num=v=>Number(v)||0;
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const money=v=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(num(v))+' ₽';
+const day=v=>{if(!v)return'—';const d=new Date(String(v).slice(0,10)+'T00:00:00');return Number.isNaN(d.valueOf())?esc(v):d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'})};
+const periodName=p=>p?monthNames[Number(p.month)-1]+' '+p.year:'—';
+const balanceClass=v=>num(v)>0?'overdue':num(v)<0?'credit':'zero';
+const sum=(rows,key)=>rows.reduce((a,r)=>a+num(r[key]),0);
+const empty=msg=>`<div class="empty">${esc(msg)}</div>`;
+const sourceConfig={
+  salary:{title:'ЗП',heading:'Зарплатные затраты',field:'salary_cost_rub'},
+  purchase:{title:'Закуп',heading:'Закупки',field:'purchase_cost_rub'},
+  body:{title:'Кузов',heading:'Кузов',field:'body_cost_rub'},
+  rental:{title:'Прокат',heading:'Прокат',field:'rental_cost_rub'},
+  repayment:{title:'Погашения',heading:'Погашения',field:'repaid_amount_rub'}
 };
-const routeParts=()=>location.pathname.split("/").filter(Boolean);
-const sourceRoute=()=>{const p=routeParts();return p.length===5&&p[0]==="balance"&&p[1]==="month"&&/^[0-9]+$/.test(p[2])&&p[3]==="source"&&sources[p[4]]?{id:Number(p[2]),source:p[4]}:null;};
-const sourcePath=(id,code)=>monthPath(id)+"/source/"+code;
-const dateText=(v)=>v?new Date(String(v).slice(0,10)+"T12:00:00").toLocaleDateString("ru-RU"):"";
-let currentSource=null;
-let sourceOffset=0;
-let sourceRows=[];
-let sourceTotal=0;
-async function showSource(id,code,append=false){
-  if(!sources[code])return;
-  const token=++requestId;
-  const host=balanceHost();
-  const offset=append?sourceOffset:0;
-  if(!append&&host)host.innerHTML='<div class="balance-loading">Загрузка детализации…</div>';
-  try{
-    const payload=await balanceApi.source(id,code,{limit:50,offset});
-    if(!active||token!==requestId)return;
-    currentMonth=id;currentSource=code;
-    sourceRows=append?sourceRows.concat(payload.rows||[]):payload.rows||[];
-    sourceOffset=sourceRows.length;
-    sourceTotal=Number(payload.total_count)||0;
-    notifyRoot();
-    const meta=sources[code];
-    const month=monthCache.get(id)?.month||rootData?.periods?.find(p=>Number(p.reporting_period_id)===id);
-    if(host)host.innerHTML=`<section class="balance-page">
-      <header class="balance-heading balance-month-heading"><button type="button" class="balance-back" data-balance-back aria-label="Назад к месяцу">←</button>
-        <div><div class="balance-kicker">${safe(periodTitle(month||{month:1,year:""}))}</div><h1>${safe(meta.label)}</h1></div></header>
-      <p class="balance-source-count">${sourceTotal} записей</p>
-      <div class="balance-cost-list">${sourceRows.map(r=>`<div class="balance-cost-row balance-detail-row">
-        <div><strong>${safe(meta.title(r))}</strong><small>${safe(dateText(r[meta.date]))}</small></div>
-        <strong>${rub(r[meta.amount])}</strong>
-      </div>`).join("")||'<p class="balance-empty">За этот месяц записей нет</p>'}</div>
-      ${sourceOffset<sourceTotal?'<button class="balance-more" data-balance-more type="button">Показать ещё</button>':""}
-    </section>`;
-  }catch(error){
-    console.error("balance_source_failed",error);
-    if(active&&token===requestId&&host)host.innerHTML='<div class="balance-error">Не удалось загрузить детализацию. <button type="button" data-balance-retry-source>Повторить</button></div>';
-  }
+const periodById=new Map();
+const employees=new Map();
+let periods=[],active=false,seq=0,currentId=null,currentSource=null,rows=[],totalCount=0,offset=0,initialized=false;
+let root=null,month=null;
+const $=id=>root?.getElementById(id);
+const pathMonth=id=>'/balance/month/'+id;
+const pathSource=(id,code)=>pathMonth(id)+'/source/'+code;
+const route=()=>{const p=location.pathname.split('/').filter(Boolean);if(p[0]!=='balance')return {id:null,source:null};const id=p[1]==='month'&&/^[0-9]+$/.test(p[2]||'')?Number(p[2]):null;return {id,source:p[3]==='source'&&sourceConfig[p[4]]?p[4]:null};};
+const monthFact=()=>month||periods.find(p=>Number(p.reporting_period_id)===currentId);
+const rangeLabel=()=>periodName(monthFact());
+function setup(){
+ if(initialized)return;
+ initialized=true;
+ root=host().attachShadow({mode:'open'});
+ root.innerHTML=`<style>${dashboardStyle}</style><div class="app"><main class="shell"><header class="header"><div class="header-row"><button id="backBtn" class="header-back" type="button" aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div id="headerTitle" class="header-title">Баланс</div><div id="snapshot" class="snapshot"><span class="snapshot-dot" aria-hidden="true"></span><span id="snapshotText">Данные</span></div></div></header><section id="content" class="content"></section></main></div>`;
+ root.addEventListener('click',e=>{
+   const b=e.target.closest('button');if(!b)return;
+   if(b.id==='backBtn'){back();return;}
+   if(b.hasAttribute('data-root-period-id')){navigate(Number(b.dataset.rootPeriodId));return;}
+   if(b.hasAttribute('data-source')){navigate(currentId,b.dataset.source);return;}
+   if(b.hasAttribute('data-repayments')){navigate(currentId,'repayment');return;}
+   if(b.hasAttribute('data-more')){void loadSource(currentId,currentSource,true);return;}
+   if(b.hasAttribute('data-retry')){void loadRoute();return;}
+ });
+ window.addEventListener('popstate',()=>{if(active)void loadRoute();});
+ globalThis.Telegram?.WebApp?.BackButton?.onClick?.(back);
 }
-
-
-function syncBack(){
-  const back=globalThis.Telegram?.WebApp?.BackButton;
-  if(!back)return;
-  if(active&&currentMonth)back.show?.();
-  else back.hide?.();
+function notify(){
+ window.dispatchEvent(new CustomEvent('balance:view-state',{detail:{root:!currentId}}));
+ const btn=globalThis.Telegram?.WebApp?.BackButton;
+ if(active&&currentId)btn?.show?.();else btn?.hide?.();
 }
-function notifyRoot(){
-  window.dispatchEvent(new CustomEvent("balance:view-state",{detail:{root:!currentMonth}}));
-  syncBack();
+function header(title){
+ $('headerTitle').textContent=title;
+ $('backBtn').classList.toggle('show',!!currentId);
+ $('snapshotText').textContent='Данные из базы';
+ notify();
 }
-function renderRoot(){
-  currentMonth=null;
-  currentSource=null;
-  notifyRoot();
-  const host=balanceHost();if(!host)return;
-  const periods=Array.isArray(rootData?.periods)?rootData.periods:[];
-  host.innerHTML=`<section class="balance-page">
-    <header class="balance-heading"><div class="balance-kicker">Финансы · по месяцам</div><h1>Баланс</h1>
-      <span class="balance-actuality">Данные из базы · актуально на момент открытия</span></header>
-    <div class="balance-month-list">${periods.map((p)=>`<button type="button" class="balance-month-card" data-month="${Number(p.reporting_period_id)}">
-      <span class="balance-month-name">${safe(periodTitle(p))}</span>
-      <span class="balance-month-amount">${rub(p.outstanding_amount_rub)}</span>
-      <span class="balance-month-chevron" aria-hidden="true">›</span>
-    </button>`).join("")||'<p class="balance-empty">Нет отчётных периодов</p>'}</div>
-  </section>`;
-}
-function renderMonth(payload){
-  const month=payload?.month;
-  if(!month)throw new Error("balance_month_payload_missing");
-  currentMonth=Number(month.reporting_period_id);
-  currentSource=null;
-  notifyRoot();
-  const host=balanceHost();if(!host)return;
-  const costs=[["Заработная плата",month.salary_cost_rub,"salary"],["Закупки",month.purchase_cost_rub,"purchase"],["Кузовной ремонт",month.body_cost_rub,"body"],["Прокат",month.rental_cost_rub,"rental"],["Погашения",month.repaid_amount_rub,"repayment"]];
-  host.innerHTML=`<section class="balance-page">
-    <header class="balance-heading balance-month-heading"><button type="button" class="balance-back" data-balance-back aria-label="К списку месяцев">←</button>
-      <div><div class="balance-kicker">Баланс · отчётный месяц</div><h1>${safe(periodTitle(month))}</h1></div></header>
-    <div class="balance-summary">
-      <div class="balance-summary-item"><span>Затраты</span><strong>${rub(month.total_cost_rub)}</strong></div>
-      <div class="balance-summary-item"><span>Погашено</span><strong>${rub(month.repaid_amount_rub)}</strong></div>
-      <div class="balance-summary-item balance-outstanding"><span>Остаток</span><strong>${rub(month.outstanding_amount_rub)}</strong></div>
-    </div>
-    <h2 class="balance-subtitle">Структура затрат</h2>
-    <div class="balance-cost-list">${costs.map(([label,value,code])=>`<button type="button" class="balance-cost-row balance-source-link" data-balance-source="${code}"><span>${label}</span><strong>${rub(value)} ›</strong></button>`).join("")}</div>
-
-  </section>`;
-}
-async function showMonth(id){
-  if(!Number.isSafeInteger(id)||id<=0){renderRoot();return;}
-  currentSource=null;
-  const token=++requestId;
-  const host=balanceHost();
-  if(host)host.innerHTML='<div class="balance-loading">Загрузка месяца…</div>';
-  try{
-    let payload=monthCache.get(id);
-    if(!payload){payload=await balanceApi.month(id);monthCache.set(id,payload);}
-    if(!active||token!==requestId)return;
-    renderMonth(payload);
-  }catch(error){
-    console.error("balance_month_failed",error);
-    if(active&&token===requestId&&host)host.innerHTML='<div class="balance-error">Не удалось загрузить месяц. <button type="button" data-balance-retry>Повторить</button></div>';
-  }
+function navigate(id,source=null){
+ history.pushState({...history.state,balanceMonth:id,balanceSource:source},'',source?pathSource(id,source):pathMonth(id));
+ void loadRoute();
 }
 function back(){
-  if(!active||!currentMonth)return;
-  if(currentSource){
-    const id=currentMonth;history.replaceState({...history.state,balanceSource:null},"",monthPath(id));void showMonth(id);return;
-  }
-  if(history.state?.balanceMonth)history.back();
-  else {history.replaceState({...history.state,balanceMonth:null},"","/balance");renderRoot();}
+ if(!active||!currentId)return;
+ if(currentSource){history.replaceState({...history.state,balanceSource:null},'',pathMonth(currentId));void loadRoute();return;}
+ history.replaceState({...history.state,balanceMonth:null},'','/balance');void loadRoute();
 }
-async function onPop(){
-  if(!active)return;
-  const detail=sourceRoute();
-  if(detail){await showSource(detail.id,detail.source);return;}
-  const id=monthIdFromPath();
-  if(id)await showMonth(id);
-  else renderRoot();
+function renderRoot(){
+ currentId=null;currentSource=null;header('Баланс');
+ const sorted=[...periods].sort((a,b)=>Number(b.year)-Number(a.year)||Number(b.month)-Number(a.month));
+ const periodHtml=sorted.length?sorted.map(p=>`<button type="button" class="period-row" data-root-period-id="${p.reporting_period_id}"><div class="period-top"><span class="period-name">${monthNames[Number(p.month)-1]} ${p.year}</span><strong class="period-total">${money(p.total_cost_rub)}</strong><svg class="chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div><div class="period-meta"><div class="period-meta-item"><span>Погашено</span><b>${money(p.repaid_amount_rub)}</b></div><div class="period-meta-item"><span>Остаток</span><b class="${balanceClass(p.outstanding_amount_rub)}">${money(p.outstanding_amount_rub)}</b></div></div></button>`).join(''):empty('Нет доступных месяцев');
+ $('content').innerHTML=`<div class="period-list">${periodHtml}</div>`;
 }
-function init(){
-  if(initialized)return;
-  initialized=true;
-  const host=balanceHost();
-  host?.addEventListener("click",(event)=>{
-    const target=event.target.closest("button");
-    if(!target)return;
-    if(target.matches("[data-balance-back]")){back();return;}
-    if(target.matches("[data-balance-retry-root]")){rootData=null;void balancePage.activate();return;}
-    if(target.matches("[data-balance-more]")){if(currentMonth&&currentSource)void showSource(currentMonth,currentSource,true);return;}
-    if(target.matches("[data-balance-retry-source]")){const detail=sourceRoute();if(detail)void showSource(detail.id,detail.source);return;}
-    if(target.hasAttribute("data-balance-source")){const code=target.dataset.balanceSource;if(currentMonth&&sources[code]){history.pushState({...history.state,balanceSource:code},"",sourcePath(currentMonth,code));void showSource(currentMonth,code);}return;}
-    if(target.matches("[data-balance-retry]")){const id=monthIdFromPath();if(id)void showMonth(id);return;}
-    const id=target.hasAttribute("data-month")?Number(target.dataset.month):NaN;
-    if(Number.isSafeInteger(id)&&id>0){
-      history.pushState({...history.state,balanceMonth:id},"",monthPath(id));
-      void showMonth(id);
-    }
-  });
-  window.addEventListener("popstate",()=>{void onPop();});
-  globalThis.Telegram?.WebApp?.BackButton?.onClick?.(back);
+function renderMonth(){
+ currentSource=null;header('Баланс');
+ const p=monthFact();if(!p){$('content').innerHTML=empty('Месяц не найден');return;}
+ const total=num(p.total_cost_rub),repaid=num(p.repaid_amount_rub),outstanding=num(p.outstanding_amount_rub);
+ const costs=[['salary','ЗП',num(p.salary_cost_rub)],['purchase','Закуп',num(p.purchase_cost_rub)],['body','Кузов',num(p.body_cost_rub)],['rental','Прокат',num(p.rental_cost_rub)]];
+ const denom=total>0?total:costs.reduce((a,x)=>a+x[2],0);
+ const costHtml=costs.map(([code,label,value])=>{const share=denom>0?Math.max(0,Math.min(100,value/denom*100)):0;return `<button type="button" class="cost-row" data-source="${code}"><div class="cost-line"><span class="cost-name">${label}</span><strong class="cost-amount">${money(value)}</strong><span class="cost-share">${share.toFixed(0)}%</span></div><div class="cost-track" aria-hidden="true"><div class="cost-fill" style="width:${share.toFixed(2)}%"></div></div></button>`}).join('');
+ $('content').innerHTML=`<div class="summary-card"><div class="summary-top"><span class="summary-kicker">Итого за период</span><span class="period-pill">${esc(rangeLabel())}</span></div><div class="summary-grid"><div class="summary-metric"><span>Затраты</span><strong>${money(total)}</strong></div><button type="button" class="summary-metric action" data-repayments><span>Погашено</span><strong>${money(repaid)}</strong></button><div class="summary-metric"><span>Остаток</span><strong class="${balanceClass(outstanding)}">${money(outstanding)}</strong></div></div></div><section class="section"><div class="section-head"><h2>Структура затрат</h2><span>1 мес.</span></div><div class="cost-list">${costHtml}</div></section>`;
+}
+function renderSalary(rows){
+  const groups=new Map();for(const r of rows){const id=Number(r.employee_id);if(!groups.has(id))groups.set(id,[]);groups.get(id).push(r)}
+  const sorted=[...groups.entries()].sort((a,b)=>String(employees.get(a[0])?.full_name||'').localeCompare(String(employees.get(b[0])?.full_name||''),'ru'));
+  return sorted.length?`<div class="group-stack">${sorted.map(([id,items])=>{const employee=employees.get(id)||items[0];const total=sum(items,'amount_rub');return `<div class="group-card"><div class="group-head"><strong>${esc(employee.full_name||employee.short_name||('Сотрудник #'+id))}</strong><span>${money(total)}</span></div>${items.sort((a,b)=>String(a.payment_date).localeCompare(String(b.payment_date))).map(r=>`<div class="detail-row"><div class="detail-line"><div><div class="detail-title">${day(r.payment_date)}</div><div class="detail-meta">Отчётный период · ${esc(periodName(periodById.get(Number(r.reporting_period_id))))}</div></div><strong class="detail-amount">${money(r.amount_rub)}</strong></div></div>`).join('')}</div>`}).join('')}</div>`:empty('Нет зарплатных затрат за выбранный период')
+}
+function renderPurchase(rows){return rows.length?`<div class="group-stack">${rows.sort((a,b)=>String(a.purchase_date).localeCompare(String(b.purchase_date))).map(r=>`<div class="group-card"><div class="detail-row"><div class="detail-line"><div><div class="detail-title">${esc(r.item_name)}</div><div class="detail-meta">${day(r.purchase_date)} · ${esc(periodName(periodById.get(Number(r.reporting_period_id))))}</div><div class="detail-meta">${num(r.quantity).toLocaleString('ru-RU')} × ${money(r.unit_price_rub)} · НДС ${num(r.vat_percent).toLocaleString('ru-RU')}% · с НДС ${money(r.gross_amount_rub)}</div></div><strong class="detail-amount">${money(r.cost_amount_rub)}</strong></div></div></div>`).join('')}</div>`:empty('Нет закупок за выбранный период')}
+function renderUpd(rows,kind){const dateKey=kind==='body'?'upd_body_id':'upd_rental_id';return rows.length?`<div class="group-stack">${rows.sort((a,b)=>String(a.upd_date).localeCompare(String(b.upd_date))||num(a[dateKey])-num(b[dateKey])).map(r=>`<div class="group-card"><div class="detail-row"><div class="detail-line"><div><div class="detail-title">УПД · ${day(r.upd_date)}</div><div class="detail-meta">${esc(periodName(periodById.get(Number(r.reporting_period_id))))}</div><div class="detail-meta">Сумма УПД ${money(r.upd_amount_rub)} · вычет ${num(r.profitability_percent).toLocaleString('ru-RU')}%</div></div><strong class="detail-amount">${money(r.cost_amount_rub)}</strong></div></div></div>`).join('')}</div>`:empty('Нет УПД за выбранный период')}
+
+function renderSource(){
+ const source=currentSource,p=monthFact(),cfg=sourceConfig[source];if(!cfg)return;
+ header(source==='repayment'?'Погашения':cfg.heading);
+ const amountField=source==='salary'||source==='repayment'?'amount_rub':'cost_amount_rub';
+ const total=sum(rows,amountField);
+ let body='';
+ if(source==='salary')body=renderSalary([...rows]);
+ else if(source==='purchase')body=renderPurchase([...rows]);
+ else if(source==='body'||source==='rental')body=renderUpd([...rows],source);
+ else body=rows.length?`<div class="group-stack">${[...rows].sort((a,b)=>String(a.payment_date).localeCompare(String(b.payment_date))).map(r=>`<div class="group-card"><div class="detail-row"><div class="detail-line"><div><div class="detail-title">${day(r.payment_date)}</div><div class="detail-meta">Погашение задолженности · ${esc(periodName(p))}</div></div><strong class="detail-amount">${money(r.amount_rub)}</strong></div></div></div>`).join('')}</div>`:empty('Нет погашений за выбранный период');
+ const heading=source==='repayment'?'Платежи':'Состав';
+ const summaryLabel=source==='repayment'?'Погашено':cfg.heading;
+ $('content').innerHTML=`<div class="detail-summary"><div class="detail-summary-top"><span class="detail-summary-label">${esc(summaryLabel)}</span><span class="period-pill">${esc(rangeLabel())}</span></div><div class="detail-summary-total">${money(total)}</div></div><section class="section"><div class="section-head"><h2>${heading}</h2><span>${totalCount} запис.</span></div>${body}</section>${rows.length<totalCount?'<button class="period-row" type="button" data-more>Показать ещё</button>':''}`;
+}
+async function loadSource(id,source,append=false){
+ const token=++seq;
+ if(!append)$('content').innerHTML=empty('Загрузка…');
+ try{
+   const result=await balanceApi.source(id,source,{limit:100,offset:append?offset:0});
+   if(!active||token!==seq)return;
+   rows=append?rows.concat(result.rows||[]):result.rows||[];
+   offset=rows.length;totalCount=Number(result.total_count)||0;
+   for(const row of rows)if(row.employee_id&&!employees.has(Number(row.employee_id)))employees.set(Number(row.employee_id),row);
+   renderSource();
+ }catch(err){console.error('balance_source_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить детализацию')+'<button type="button" data-retry>Повторить</button>';}
+}
+async function loadRoute(){
+ const token=++seq;
+ const r=route();
+ currentId=r.id;currentSource=r.source;
+ if(!currentId){renderRoot();return;}
+ $('content').innerHTML=empty('Загрузка…');
+ try{
+   const result=await balanceApi.month(currentId);
+   if(!active||token!==seq)return;
+   month=result.month;
+   periodById.set(Number(month.reporting_period_id),month);
+   if(currentSource)await loadSource(currentId,currentSource);
+   else renderMonth();
+ }catch(err){console.error('balance_month_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить месяц')+'<button type="button" data-retry>Повторить</button>';}
 }
 export const balancePage={
-  code:"balance",
-  name:"Баланс",
-  async activate(){
-    init();
-    active=true;
-    const staff=staffHost(),host=balanceHost();
-    if(staff)staff.hidden=true;
-    if(host){host.hidden=false;host.innerHTML='<div class="balance-loading">Загрузка баланса…</div>';}
-    const token=++requestId;
-    try{
-      if(!rootData)rootData=await balanceApi.root();
-      if(!active||token!==requestId)return;
-      const detail=sourceRoute();
-      if(detail)await showSource(detail.id,detail.source);
-      else {const id=monthIdFromPath();if(id)await showMonth(id);else renderRoot();}
-    }catch(error){
-      console.error("balance_root_failed",error);
-      if(active&&token===requestId&&host)host.innerHTML='<div class="balance-error">Не удалось загрузить баланс. <button type="button" data-balance-retry-root>Повторить</button></div>';
-    }
-  },
-  deactivate(){
-    active=false;requestId++;currentMonth=null;currentSource=null;syncBack();
-    const host=balanceHost();if(host)host.hidden=true;
-  }
+ code:'balance',name:'Баланс',
+ async activate(){
+   setup();active=true;staff().hidden=true;host().hidden=false;
+   $('content').innerHTML=empty('Загрузка…');
+   const token=++seq;
+   try{
+     const result=await balanceApi.root();
+     if(!active||token!==seq)return;
+     periods=result.periods||[];
+     periodById.clear();for(const p of periods)periodById.set(Number(p.reporting_period_id),p);
+     await loadRoute();
+   }catch(err){console.error('balance_root_failed',err);if(active&&token===seq)$('content').innerHTML=empty('Не удалось загрузить баланс')+'<button type="button" data-retry>Повторить</button>';}
+ },
+ deactivate(){active=false;seq++;currentId=null;currentSource=null;notify();host().hidden=true;}
 };
