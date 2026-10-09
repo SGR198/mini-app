@@ -202,7 +202,7 @@ function filterSummary(open=false){
   return '<div class="filter-summary">'+labels.map(([tab,title,value,icon])=>'<button class="filter-cell '+(open&&filterTab===tab?'active':'')+' '+(selected===tab?'selected':'')+' '+(!cleared&&tab==='month'&&state.rangeEnd>state.rangeStart?'month-range':'')+'" data-ftab="'+tab+'" aria-label="'+title+': '+esc(value)+'">'+icon+'<span class="filter-text">'+esc(value)+'</span>'+chevronIcon()+'</button>').join('')+'</div>';
 }
 function renderFilter(){
-  const accrualActive=state.section==='accruals'&&(state.view==='list'||state.view==='employee'||state.view==='source'||state.view==='repair_positions'||state.view==='body_repair_accruals'||state.view==='mechanical_repair_accruals'||state.view==='body_repair_work_orders');
+  const accrualActive=state.section==='accruals'&&(state.view==='list'||state.view==='employee'||state.view==='source'||state.view==='repair_positions'||isAccrualDetailScreen(state.view)||state.view==='body_repair_work_orders');
   const paymentActive=state.section==='payments'&&(state.view==='list'||state.view==='payment_employee');
   const balanceActive=state.section==='balance';
   const active=accrualActive||paymentActive||balanceActive;
