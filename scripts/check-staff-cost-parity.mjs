@@ -88,6 +88,10 @@ const stateMarkers=[
 ];
 
 const failures=[];
+// Verify the ACTUAL layout classifier, not just incidental registry use elsewhere.
+const filterBody=renderer.slice(renderer.indexOf('function renderFilter(){'),renderer.indexOf('function renderFilter(){')+900);
+if(!filterBody.includes('isAccrualDetailScreen(state.view)')) failures.push('renderFilter must classify all registered accrual detail screens');
+
 // Missing reporting months must not call the statement API with an invalid empty period_ids array.
 if(!renderer.includes("if(!ids.length){\n    statementModel={contract:'staff_cost_statement'")) failures.push('statement empty period guard missing');
 
