@@ -294,7 +294,7 @@ function chunks(values,size=12){
 function emptyAccrualModel(ids=[]){
   return {
     contract:'staff_cost_accruals',
-    version:2,
+    version:3,
     generated_at:data.meta.generated_at,
     scope:{period_ids:ids},
     summary:{
@@ -304,7 +304,8 @@ function emptyAccrualModel(ids=[]){
       body_accrual_total:0,
       service_advisor_accrual_total:0,
       mechanical_accrual_total:0,
-      employee_count:0
+      employee_count:0,
+      source_totals:{}
     },
     items:[],
     page:{limit:100,offset:0,total_count:0,next_offset:null}
@@ -325,7 +326,7 @@ function mergeAccrualModels(parts,ids){
   };
   for(const part of parts){
     for(const field of Object.keys(summary)){
-      if(field!=='employee_count')summary[field]+=num(part?.summary?.[field]);
+      if(field!=='employee_count'&&field!=='source_totals')summary[field]+=num(part?.summary?.[field]);
     }
     for(const [sourceCode,amount] of Object.entries(part?.summary?.source_totals||{})){
       summary.source_totals[sourceCode]=(summary.source_totals[sourceCode]||0)+num(amount);
