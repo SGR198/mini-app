@@ -88,6 +88,9 @@ const stateMarkers=[
 ];
 
 const failures=[];
+// Missing reporting months must not call the statement API with an invalid empty period_ids array.
+if(!renderer.includes("if(!ids.length){\n    statementModel={contract:'staff_cost_statement'")) failures.push('statement empty period guard missing');
+
 // source_totals is an object, never a numeric accumulator; quarter/year scopes must merge it by key.
 if(!renderer.includes("field!=='employee_count'&&field!=='source_totals'")) failures.push("source_totals must be excluded from numeric summary aggregation");
 if(!renderer.includes("Object.entries(part?.summary?.source_totals||{})")) failures.push("source_totals must merge by source code");
