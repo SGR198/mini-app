@@ -18,6 +18,7 @@ const publicRendererPath=join(root,"public/app/pages/staff-cost/renderer.js");
 const publicCssPath=join(root,"public/app/styles/staff-cost.css");
 const publicIndexPath=join(root,"public/index.html");
 const apiPath=join(root,"src/frontend/pages/staff-cost/api.js");
+const accrualModulePaths=["mechanical-accrual-screen.js","body-accrual-screen.js","mechanical-service-advisor-screen.js"].map(name=>join(root,"src/frontend/pages/staff-cost",name));
 
 const [renderer,css,index,api,publicRenderer,publicCss,publicIndex]=await Promise.all([
   readFile(rendererPath,"utf8"),
@@ -28,6 +29,9 @@ const [renderer,css,index,api,publicRenderer,publicCss,publicIndex]=await Promis
   readFile(publicCssPath,"utf8"),
   readFile(publicIndexPath,"utf8")
 ]);
+
+const accrualModuleSources=await Promise.all(accrualModulePaths.map(path=>readFile(path,"utf8")));
+const functionSources=[renderer,...accrualModuleSources].join("\n");
 
 const requiredFunctions=[
   "renderAccruals",
@@ -85,7 +89,7 @@ const stateMarkers=[
 const failures=[];
 
 for(const name of requiredFunctions){
-  if(!renderer.includes(`function ${name}`)) failures.push(`missing function: ${name}`);
+  if(!functionSources.includes(`function ${name}`)) failures.push(`missing function: ${name}`);
 }
 for(const marker of rendererMarkers){
   if(!renderer.includes(marker)) failures.push(`missing renderer marker: ${marker}`);
