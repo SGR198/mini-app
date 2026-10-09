@@ -40,7 +40,7 @@ function setup(){
  if(initialized)return;
  initialized=true;
  root=host().attachShadow({mode:'open'});
- root.innerHTML=`<style>${dashboardStyle}</style><div class="app"><main class="shell"><header class="header"><div class="header-row"><button id="backBtn" class="header-back" type="button" aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div id="headerTitle" class="header-title">Баланс</div><div id="snapshot" class="snapshot"><span class="snapshot-dot" aria-hidden="true"></span><span id="snapshotText">Данные</span></div></div></header><section id="content" class="content"></section></main></div>`;
+ root.innerHTML=`<style>${dashboardStyle}\n:host([data-balance-root="true"]) .header{padding-right:70px}\n:host([data-balance-root="true"]) .header-row{grid-template-columns:minmax(0,1fr);gap:6px}\n:host([data-balance-root="true"]) .snapshot{justify-self:start;max-width:100%;min-width:0}\n:host([data-balance-root="true"]) .snapshot span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n</style><div class="app"><main class="shell"><header class="header"><div class="header-row"><button id="backBtn" class="header-back" type="button" aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 4-8 8 8 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div id="headerTitle" class="header-title">Баланс</div><div id="snapshot" class="snapshot"><span class="snapshot-dot" aria-hidden="true"></span><span id="snapshotText">Данные</span></div></div></header><section id="content" class="content"></section></main></div>`;
  root.addEventListener('click',e=>{
    const b=e.target.closest('button');if(!b)return;
    if(b.id==='backBtn'){back();return;}
@@ -59,6 +59,7 @@ function notify(){
  if(active&&currentId)btn?.show?.();else btn?.hide?.();
 }
 function header(title){
+ root.host.dataset.balanceRoot=String(!currentId);
  $('headerTitle').textContent=title;
  $('backBtn').classList.toggle('show',!!currentId);
  $('snapshotText').textContent='Данные из базы';
