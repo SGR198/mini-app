@@ -18,6 +18,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   </div>`;
 
   let activeWorkspace="staff_cost";
+  let staffRoot=false;
   const trigger=host.querySelector(".workspace-trigger");
   const menu=host.querySelector(".workspace-menu");
 
@@ -27,8 +28,8 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     if(!visible){menu.hidden=true;trigger.setAttribute("aria-expanded","false");}
   }
   setRootVisible(false);
-  window.addEventListener("staff-cost:view-state",(event)=>{if(activeWorkspace==="staff_cost")setRootVisible(Boolean(event.detail?.root));});
-  window.addEventListener("balance:view-state",(event)=>{if(activeWorkspace==="balance")setRootVisible(Boolean(event.detail?.root));});
+  window.addEventListener("staff-cost:view-state",(event)=>{staffRoot=Boolean(event.detail?.root);if(activeWorkspace==="staff_cost")setRootVisible(staffRoot);});
+  window.addEventListener("balance:view-state",()=>{if(activeWorkspace==="balance")setRootVisible(globalThis.location?.pathname==="/balance");});
 
   function routeFor(path){
     const normalized=normalizePath(path);
@@ -37,26 +38,31 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
   }
 
   async function activateRoute(route,{replace=true}={}){
-    if(route.page.code!=="staff_cost")setRootVisible(route.page.code==="balance");
-    await onActivate(route);
-    if(route.page.code==="balance")setRootVisible(globalThis.location?.pathname==="/balance");
-    if(route.page.code==="staff_cost"){
-      const view=window.StaffCostDashboard?.getState?.();
-      setRootVisible(Boolean(view&&view.section==="accruals"&&view.view==="list"));
-    }
+    // Establish route and workspace before asynchronous activation can emit view-state events.
     activeWorkspace=route.page.code;
-    host.dataset.workspace=route.page.code;
-    host.querySelectorAll("[data-workspace]").forEach((button)=>{
-      button.classList.toggle("active",button.dataset.workspace===route.page.code);
+    host.dataset.workspace=activeWorkspace;
+    const target=activeWorkspace==="staff_cost"?"/":
+      activeWorkspace==="balance"&&location.pathname.startsWith("/balance/month/")?location.pathname:route.path;
+    if(location.pathname!==target){
+      const state={...(history.state||{}),miniappWorkspace:activeWorkspace};
+      if(replace)history.replaceState(state,"",target);
+      else history.pushState(state,"",target);
+    }
+    const syncVisibility=()=>setRootVisible(activeWorkspace==="balance"
+      ? location.pathname==="/balance"
+      : activeWorkspace==="staff_cost"&&staffRoot);
+    syncVisibility();
+    host.querySelectorAll("[data-workspace]").forEach(button=>{
+      button.classList.toggle("active",button.dataset.workspace===activeWorkspace);
     });
     menu.hidden=true;
     trigger.setAttribute("aria-expanded","false");
-    const target=route.page.code==="staff_cost"?"/":route.page.code==="balance"&&globalThis.location?.pathname.startsWith("/balance/month/")?globalThis.location.pathname:route.path;
-    if(globalThis.location?.pathname!==target){
-      const state={...(history.state||{}),miniappWorkspace:route.page.code};
-      if(replace) history.replaceState(state,"",target);
-      else history.pushState(state,"",target);
+    await onActivate(route);
+    if(activeWorkspace==="staff_cost"){
+      const view=window.StaffCostDashboard?.getState?.();
+      staffRoot=Boolean(view&&view.section==="accruals"&&view.view==="list");
     }
+    syncVisibility();
   }
 
   trigger.addEventListener("click",()=>{
