@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { accrualScreenCodes, isAccrualDetailScreen } from "../src/frontend/pages/staff-cost/accrual-screens.js";
 
 const root=join(dirname(fileURLToPath(import.meta.url)),"..");
 
@@ -87,6 +88,15 @@ const stateMarkers=[
 ];
 
 const failures=[];
+
+// All registered accrual detail views must use the SAME shell as worker screens.
+for(const view of Object.values(accrualScreenCodes)){
+  if(!isAccrualDetailScreen(view)) failures.push(`accrual view missing shared layout: ${view}`);
+}
+if(!renderer.includes("isAccrualDetailScreen(state.view)")){
+  failures.push("accrual detail screens must use the shared layout registry in renderFilter");
+}
+if(isAccrualDetailScreen("list")) failures.push("root accrual list incorrectly classified as detail");
 
 for(const name of requiredFunctions){
   if(!functionSources.includes(`function ${name}`)) failures.push(`missing function: ${name}`);
