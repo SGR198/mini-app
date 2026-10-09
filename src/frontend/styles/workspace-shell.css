@@ -16,8 +16,8 @@
 #workspace-switcher .workspace-gear-icon{width:21px;height:21px;display:block}
 #workspace-switcher .workspace-menu{top:44px}
 body.workspace-root-switcher.accrual-list .hero{
-  clip-path:polygon(0 0,calc(100% - 53px) 0,calc(100% - 48px) 5px,calc(100% - 48px) 43px,calc(100% - 43px) 48px,100% 48px,100% 100%,0 100%);
+  clip-path:polygon(0 0,calc(100% - 64px) 0,calc(100% - 59px) 5px,calc(100% - 59px) 53px,calc(100% - 54px) 58px,100% 58px,100% 100%,0 100%);
   mask-image:none;-webkit-mask-image:none
 }
-body.workspace-root-switcher.accrual-list .hero-top{padding-right:52px}
-body.workspace-root-switcher.accrual-list .hero-bottom{padding-right:40px}
+body.workspace-root-switcher.accrual-list .hero-top{padding-right:68px}
+body.workspace-root-switcher.accrual-list .hero-bottom{padding-right:58px}
