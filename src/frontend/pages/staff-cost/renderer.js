@@ -340,7 +340,7 @@ function mergeAccrualModels(parts,ids){
   };
   for(const part of parts){
     for(const field of Object.keys(summary)){
-      if(field!=='employee_count')summary[field]+=num(part?.summary?.[field]);
+      if(field!=='employee_count'&&field!=='source_totals')summary[field]+=num(part?.summary?.[field]);
     }
     for(const [sourceCode,amount] of Object.entries(part?.summary?.source_totals||{})){
       summary.source_totals[sourceCode]=(summary.source_totals[sourceCode]||0)+num(amount);
