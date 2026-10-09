@@ -111,7 +111,7 @@ function paymentRowsBase(employeeId=null){
   return payments
     .filter(p=>employeeId==null||Number(p.staff_member_id)===Number(employeeId))
     .slice()
-    .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
+    .sort((a,b)=>comparePaymentMoments(a,b));
 }
 function paymentRowsFiltered(employeeId=null){return paymentRowsBase(employeeId)}
 function paymentSummary(){return paymentModel?.summary||{
@@ -137,7 +137,22 @@ function paymentIcon(kind,code=''){
 }
 function paymentTypeIcon(p){if(p.status==='draft')return paymentIcon('draft');const src=sourceById.get(Number(p.payment_source_id));return paymentIcon('source',src?.code||'')}
 function paymentStatusIcon(status){return status==='paid'?paymentIcon('paid'):paymentIcon('draft')}
-function paymentDateText(v){return new Date(String(v)+'T00:00:00').toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'})}
+function paymentDateText(v){return v?new Date(String(v)+'T00:00:00').toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—'}
+// Canonical paid payment instant is paid_at; payment_date is a backend JSON compatibility key.
+// Always format paid_at in the business timezone, independent of the browser timezone.
+function paymentMomentText(payment){
+  if(payment?.status==='paid'&&payment?.paid_at){
+    const instant=new Date(payment.paid_at);
+    if(!Number.isNaN(instant.valueOf()))return new Intl.DateTimeFormat('ru-RU',{timeZone:'Asia/Yekaterinburg',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(instant).replace(',','');
+  }
+  return paymentDateText(payment?.payment_date);
+}
+function comparePaymentMoments(a,b){
+  const byDate=String(b.payment_date||'').localeCompare(String(a.payment_date||''));
+  if(byDate)return byDate;
+  const byInstant=String(b.paid_at||'').localeCompare(String(a.paid_at||''));
+  return byInstant||Number(b.id)-Number(a.id);
+}
 function paymentStamp(){const g=data?.meta?.generated_at?new Date(data.meta.generated_at):null;return g&&!Number.isNaN(g.valueOf())?g.toLocaleString('ru-RU',{timeZone:'Asia/Yekaterinburg',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')+' ЕКБ':''}
 function paymentAggregateChip(){
   if(state.rangeStart===state.rangeEnd)return '';
@@ -719,7 +734,7 @@ function installCurrentContinuation(){
         cursor:paymentModel.page.next_cursor
       });
       payments=mergeUniqueRows(payments,next.items,'id')
-        .sort((a,b)=>String(b.payment_date).localeCompare(String(a.payment_date))||Number(b.id)-Number(a.id));
+        .sort((a,b)=>comparePaymentMoments(a,b));
       paymentModel={...paymentModel,items:payments,page:next.page,generated_at:next.generated_at};
       touchGenerated(next);
     };
@@ -982,7 +997,7 @@ function billingPaymentRows(){
 }
 function billingPaymentRow(p){
   const allocations=Array.isArray(p.allocations)?p.allocations:[];
-  const date=p.payment_date?new Date(p.payment_date+'T00:00:00').toLocaleDateString('ru-RU'):'—';
+  const date=p.payment_date?esc(paymentMomentText(p)):'—';
   const payer=p.payer_display_name_short||p.payer_display_name||'Плательщик не указан';
   const recipient=p.recipient_display_name_short||p.recipient_display_name||'Получатель не указан';
   const allocationTitle=allocations.length===0
@@ -1187,11 +1202,11 @@ function paymentSummaryCards(summary){
 }
 function paymentRowGeneral(p){
   const person=staffById.get(Number(p.staff_member_id)),src=sourceById.get(Number(p.payment_source_id)),sourceCode=src?.code||'';
-  return '<button type="button" class="payment-register-row general '+(p.status==='draft'?'draft':'paid')+'" data-payemp="'+p.staff_member_id+'"><span class="pay-person">'+esc(shortName(person?.fio_full||('Сотрудник #'+p.staff_member_id)))+'</span><span class="pay-date">'+esc(paymentDateText(p.payment_date))+'</span><span class="pay-type source-'+esc(sourceCode)+'" aria-label="'+esc(src?.name||'')+'">'+paymentIcon('source',sourceCode)+'</span><span class="pay-amount">'+rub(p.amount)+'</span><span class="pay-status" aria-label="'+(p.status==='paid'?'Выплачено':'Черновик')+'">'+paymentStatusIcon(p.status)+'</span><svg class="pay-chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>';
+  return '<button type="button" class="payment-register-row general '+(p.status==='draft'?'draft':'paid')+'" data-payemp="'+p.staff_member_id+'"><span class="pay-person">'+esc(shortName(person?.fio_full||('Сотрудник #'+p.staff_member_id)))+'</span><span class="pay-date">'+esc(paymentMomentText(p))+'</span><span class="pay-type source-'+esc(sourceCode)+'" aria-label="'+esc(src?.name||'')+'">'+paymentIcon('source',sourceCode)+'</span><span class="pay-amount">'+rub(p.amount)+'</span><span class="pay-status" aria-label="'+(p.status==='paid'?'Выплачено':'Черновик')+'">'+paymentStatusIcon(p.status)+'</span><svg class="pay-chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>';
 }
 function paymentRowEmployee(p){
   const src=sourceById.get(Number(p.payment_source_id)),sourceCode=src?.code||'';
-  return '<button type="button" class="payment-register-row employee '+(p.status==='draft'?'draft':'paid')+'" data-pay="'+p.id+'"><span class="pay-date">'+esc(paymentDateText(p.payment_date))+'</span><span class="pay-type source-'+esc(sourceCode)+'" aria-label="'+esc(src?.name||'')+'">'+paymentIcon('source',sourceCode)+'</span><span class="pay-amount">'+rub(p.amount)+'</span><span class="pay-status" aria-label="'+(p.status==='paid'?'Выплачено':'Черновик')+'">'+paymentStatusIcon(p.status)+'</span><svg class="pay-chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>';
+  return '<button type="button" class="payment-register-row employee '+(p.status==='draft'?'draft':'paid')+'" data-pay="'+p.id+'"><span class="pay-date">'+esc(paymentMomentText(p))+'</span><span class="pay-type source-'+esc(sourceCode)+'" aria-label="'+esc(src?.name||'')+'">'+paymentIcon('source',sourceCode)+'</span><span class="pay-amount">'+rub(p.amount)+'</span><span class="pay-status" aria-label="'+(p.status==='paid'?'Выплачено':'Черновик')+'">'+paymentStatusIcon(p.status)+'</span><svg class="pay-chev" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>';
 }
 function bindPaymentCommon(){
   document.querySelectorAll('[data-payment-status]').forEach(b=>b.onclick=()=>{
@@ -1310,7 +1325,7 @@ function renderBalanceMonth(){
     +'<div class="balance-period"><span class="payment-period-pill">'+calendarIcon(false)+'<span>'+esc(periodLabel(r.reporting_period_id,true))+'</span></span></div>'
     +'<div class="balance-month-grid"><div class="detail-box"><span>Входящий остаток</span><b>'+rub(r.opening_balance)+'</b></div><div class="detail-box"><span>Начислено</span><b>'+rub(r.accrual_total)+'</b></div><div class="detail-box"><span>Выплачено</span><b>'+rub(r.payment_total)+'</b></div><div class="detail-box"><span>Дельта месяца</span><b>'+rub(r.month_delta)+'</b></div><div class="detail-box outgoing"><span>Исходящий остаток</span><b class="'+signClass(r.closing_balance)+'">'+rub(r.closing_balance)+'</b></div></div>'
     +'<div class="balance-register-heading"><h2>Выплаты месяца</h2><span>'+esc(recordCountLabel(linked.length))+'</span></div>'
-    +(linked.length?'<div class="balance-register">'+linked.map(p=>'<button class="balance-period-row" type="button" data-linkedpay="'+p.id+'"><span class="period-main"><strong>'+esc(paymentDateText(p.payment_date))+'</strong><small>'+esc(sourceById.get(Number(p.payment_source_id))?.name||'—')+'</small></span><span class="balance-end">'+rub(p.amount)+'</span><svg class="chev" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>').join('')+'</div>':empty('Оплаченных выплат за этот расчётный месяц нет'))
+    +(linked.length?'<div class="balance-register">'+linked.map(p=>'<button class="balance-period-row" type="button" data-linkedpay="'+p.id+'"><span class="period-main"><strong>'+esc(paymentMomentText(p))+'</strong><small>'+esc(sourceById.get(Number(p.payment_source_id))?.name||'—')+'</small></span><span class="balance-end">'+rub(p.amount)+'</span><svg class="chev" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>').join('')+'</div>':empty('Оплаченных выплат за этот расчётный месяц нет'))
     +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
   document.querySelector('[data-balance-back]')?.addEventListener('click',()=>history.back());
   document.querySelectorAll('[data-linkedpay]').forEach(b=>b.onclick=()=>push({...state,section:'payments',view:'payment',payment_id:Number(b.dataset.linkedpay)}));

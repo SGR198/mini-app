@@ -88,6 +88,10 @@ const stateMarkers=[
 ];
 
 const failures=[];
+// Staff Cost payments: paid_at is the canonical instant; payment_date is API JSON compatibility.
+if(!renderer.includes("function paymentMomentText(payment)")||!renderer.includes("timeZone:'Asia/Yekaterinburg'")) failures.push("Staff Cost paid_at timezone display contract missing");
+if(!renderer.includes("function comparePaymentMoments(a,b)")||!renderer.includes(".sort((a,b)=>comparePaymentMoments(a,b))")) failures.push("Staff Cost paid_at sorting contract missing");
+
 
 // All registered accrual detail views must use the SAME shell as worker screens.
 for(const view of Object.values(accrualScreenCodes)){
