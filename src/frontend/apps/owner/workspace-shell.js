@@ -50,7 +50,7 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     }
     const syncVisibility=()=>setRootVisible(activeWorkspace==="balance"
       ? location.pathname==="/balance"
-      : activeWorkspace==="staff_cost"&&staffRoot);
+      : activeWorkspace==="work_orders"?location.pathname==="/work-orders":activeWorkspace==="staff_cost"&&staffRoot);
     syncVisibility();
     host.querySelectorAll("[data-workspace]").forEach(button=>{
       button.classList.toggle("active",button.dataset.workspace===activeWorkspace);
