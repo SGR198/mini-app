@@ -320,11 +320,15 @@ function mergeAccrualModels(parts,ids){
     body_accrual_total:0,
     service_advisor_accrual_total:0,
     mechanical_accrual_total:0,
-    employee_count:0
+    employee_count:0,
+    source_totals:{}
   };
   for(const part of parts){
     for(const field of Object.keys(summary)){
       if(field!=='employee_count')summary[field]+=num(part?.summary?.[field]);
+    }
+    for(const [sourceCode,amount] of Object.entries(part?.summary?.source_totals||{})){
+      summary.source_totals[sourceCode]=(summary.source_totals[sourceCode]||0)+num(amount);
     }
     for(const row of part?.items||[]){
       const id=Number(row.staff_member_id);
@@ -350,7 +354,7 @@ function mergeAccrualModels(parts,ids){
   summary.employee_count=items.length;
   return {
     contract:'staff_cost_accruals',
-    version:2,
+    version:3,
     generated_at:parts.map(x=>x?.generated_at).filter(Boolean).at(-1)||data.meta.generated_at,
     scope:{period_ids:ids},
     summary,
@@ -642,7 +646,7 @@ async function ensureViewData(){
       await loadBillingPayments();
       return;
     }
-    accrualEmployees=await loadMechanicalAdvisorSourceRows(rangeIds);
+    await loadAccrualScope(rangeIds);
     return;
   }
   if(state.section==='payments'){
@@ -822,7 +826,8 @@ function empty(text='Нет данных для выбранного перио�
 function renderAccruals(){
   const scope=currentAccrualAggregate();
   const list=Array.isArray(scope?.employees)?scope.employees:[];
-  const total=num(scope?.accrual_total),body=num(scope?.body_accrual_total),advisor=mechanicalAdvisorRows(accrualEmployees,accrualIds()).reduce((sum,row)=>sum+row.total,0),bodyAdvisor=bodyAdvisorRows(accrualEmployees,accrualIds()).reduce((sum,row)=>sum+row.total,0),mech=num(scope?.mechanical_accrual_total);
+  const sourceTotals=scope?.source_totals||{};
+  const total=num(scope?.accrual_total),body=num(sourceTotals.body_repair_worker),advisor=num(sourceTotals.mechanical_repair_service_advisor),bodyAdvisor=num(sourceTotals.body_repair_service_advisor),mech=num(sourceTotals.mechanical_repair_mechanic);
   const generated=data?.meta?.generated_at?new Date(data.meta.generated_at):null,stamp=generated&&!Number.isNaN(generated.valueOf())?generated.toLocaleString('ru-RU',{timeZone:'Asia/Yekaterinburg',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')+' ЕКБ':'';
   $('content').innerHTML='<div class="summary-sticky"><div class="hero"><div class="hero-top"><div class="hero-label">Начисление</div><div class="accrual-snapshot"><span class="snapshot-dot" aria-hidden="true"></span>Данные на '+esc(stamp)+'</div></div><div class="hero-bottom"><div class="hero-value">'+rub(total)+'</div><div class="hero-count"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3.3"/><path d="M2.5 19c0-3.6 2.8-6.2 6.5-6.2s6.5 2.6 6.5 6.2v1H2.5z"/><circle cx="17.4" cy="8" r="2.6"/><path d="M17 13.1c2.9 0 4.5 2.1 4.5 5.1v1.8h-3.6v-1c0-2-.7-3.8-2.1-5.2.4-.3.8-.5 1.2-.7z"/></svg><div><strong>'+num(scope?.employee_count)+'</strong><span>сотрудников</span></div></div></div></div>' + renderAccrualCards({body,advisor,bodyAdvisor,mech},rub) + '</div>'+filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"')+'<div class="section-title"><h2>Сотрудники</h2><span>'+num(scope?.employee_count)+' строк</span></div>'+(list.length?'<div class="list">'+list.map(x=>'<button class="item" data-emp="'+x.staff_member_id+'"><div class="item-top"><div class="item-main"><div class="name">'+esc(shortName(x.fio_full))+'</div></div><div class="amount">'+rub(x.accrual_total)+'</div><svg class="chev" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.8 5.2 5.2-5.2 5.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></button>').join('')+'</div>':empty());
   document.querySelectorAll('.filter-dock [data-ftab]').forEach(b=>b.onclick=()=>openFilter(b.dataset.ftab));
