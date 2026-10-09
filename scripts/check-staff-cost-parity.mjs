@@ -88,6 +88,10 @@ const stateMarkers=[
 ];
 
 const failures=[];
+// source_totals is an object, never a numeric accumulator; quarter/year scopes must merge it by key.
+if(!renderer.includes("field!=='employee_count'&&field!=='source_totals'")) failures.push("source_totals must be excluded from numeric summary aggregation");
+if(!renderer.includes("Object.entries(part?.summary?.source_totals||{})")) failures.push("source_totals must merge by source code");
+
 // Staff Cost payments: paid_at is the canonical instant; payment_date is API JSON compatibility.
 if(!renderer.includes("function paymentMomentText(payment)")||!renderer.includes("timeZone:'Asia/Yekaterinburg'")) failures.push("Staff Cost paid_at timezone display contract missing");
 if(!renderer.includes("function comparePaymentMoments(a,b)")||!renderer.includes(".sort((a,b)=>comparePaymentMoments(a,b))")) failures.push("Staff Cost paid_at sorting contract missing");
