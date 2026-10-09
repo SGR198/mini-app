@@ -562,6 +562,13 @@ async function loadStaffPayments(){
 async function loadStatementList(ids){
   const key=scopeKey(ids);
   if(statementModel&&statementModelKey===key)return statementModel;
+  // No registered reporting months in this range: backend rejects empty period_ids.
+  // Render the existing statement UI with zero totals instead of calling the API.
+  if(!ids.length){
+    statementModel={contract:'staff_cost_statement',version:1,generated_at:data?.meta?.generated_at||null,period_ids:[],latest_period_id:null,summary:{payable_total:0,payable_employee_count:0},flow:{accrual_total:0,payment_total:0,payment_count:0},items:[],page:{limit:100,offset:0,total_count:0,next_offset:null}};
+    statementModelKey=key;
+    return statementModel;
+  }
   const payload=await staffCostApi.statement(ids,{limit:100,offset:0});
   touchGenerated(payload);
   statementModel=payload;
