@@ -58,6 +58,10 @@ export function createWorkspaceShell({routes,defaultRoute,onActivate}){
     menu.hidden=true;
     trigger.setAttribute("aria-expanded","false");
     await onActivate(route);
+    if(activeWorkspace==="staff_cost"){
+      const view=window.StaffCostDashboard?.getState?.();
+      staffRoot=Boolean(view&&view.section==="accruals"&&view.view==="list");
+    }
     syncVisibility();
   }
 
