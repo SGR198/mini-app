@@ -11,3 +11,11 @@ export function renderRegisteredAccrualScreen(view, screens){
   renderer();
   return true;
 }
+
+/** Shared Staff Cost accrual detail layout contract.
+ * Every registered source screen uses the same bottom navigation/filter shell.
+ * Adding a new source view to accrualScreenCodes automatically opts into that layout.
+ */
+export function isAccrualDetailScreen(view){
+  return Object.hasOwn(accrualScreenCodes,view);
+}

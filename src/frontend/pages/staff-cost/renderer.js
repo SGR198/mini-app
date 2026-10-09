@@ -2,7 +2,7 @@ import { mechanicalAdvisorRows, renderMechanicalServiceAdvisorAccruals } from ".
 import { bodyAdvisorRows, renderBodyServiceAdvisorAccruals } from "./body-service-advisor-screen.js";
 import { renderMechanicalRepairAccruals } from "./mechanical-accrual-screen.js";
 import { renderBodyRepairAccruals } from "./body-accrual-screen.js";
-import { renderRegisteredAccrualScreen } from "./accrual-screens.js";
+import { renderRegisteredAccrualScreen, isAccrualDetailScreen } from "./accrual-screens.js";
 import { renderAccrualCards } from "./accrual-cards.js";
 import { staffCostApi } from "./api.js";
 
@@ -153,7 +153,7 @@ function quarterRangeText(){const a=state.rangeStart,b=state.rangeEnd,q1=Math.fl
 function monthRangeText(){const a=state.rangeStart,b=state.rangeEnd;return cap(monthNames[monthOf(a)-1])+(a===b?'':' – '+cap(monthNames[monthOf(b)-1]))}
 function chooseRange(a,b){
   if(state.section==='accruals'&&state.view==='employee')replace({...state,rangeStart:a,rangeEnd:b,employeeAllPeriods:false});
-  else if(state.section==='accruals'&&(state.view==='body_repair_accruals'||state.view==='mechanical_repair_accruals'||state.view==='body_repair_work_orders'))replace({...state,rangeStart:a,rangeEnd:b});
+  else if(state.section==='accruals'&&(isAccrualDetailScreen(state.view)||state.view==='body_repair_work_orders'))replace({...state,rangeStart:a,rangeEnd:b});
   else if(state.section==='payments'&&state.view==='payment_employee')replace({...state,rangeStart:a,rangeEnd:b,payment_id:null});
   else if(state.section==='payments'&&state.view==='list')replace({...state,rangeStart:a,rangeEnd:b,payment_id:null});
   else if(state.section==='balance'&&state.view==='employee_balance')replace({...state,rangeStart:a,rangeEnd:b});
