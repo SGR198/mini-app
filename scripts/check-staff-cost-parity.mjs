@@ -18,7 +18,7 @@ const publicRendererPath=join(root,"public/app/pages/staff-cost/renderer.js");
 const publicCssPath=join(root,"public/app/styles/staff-cost.css");
 const publicIndexPath=join(root,"public/index.html");
 const apiPath=join(root,"src/frontend/pages/staff-cost/api.js");
-const accrualModulePaths=["mechanical-accrual-screen.js","body-accrual-screen.js","mechanical-service-advisor-screen.js"].map(name=>join(root,"src/frontend/pages/staff-cost",name));
+const accrualModulePaths=["mechanical-accrual-screen.js","body-accrual-screen.js","mechanical-service-advisor-screen.js","body-service-advisor-screen.js"].map(name=>join(root,"src/frontend/pages/staff-cost",name));
 
 const [renderer,css,index,api,publicRenderer,publicCss,publicIndex]=await Promise.all([
   readFile(rendererPath,"utf8"),
