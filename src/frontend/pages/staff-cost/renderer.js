@@ -1,3 +1,6 @@
+import { renderMechanicalRepairAccruals } from "./mechanical-accrual-screen.js";
+import { renderBodyRepairAccruals } from "./body-accrual-screen.js";
+import { renderRegisteredAccrualScreen } from "./accrual-screens.js";
 import { renderAccrualCards } from "./accrual-cards.js";
 import { staffCostApi } from "./api.js";
 
@@ -903,57 +906,9 @@ function bodyRepairWorkOrderCard(item){
   </article>`;
 }
 function mechanicalHours(v){return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(num(v))+' ч'}
-function renderMechanicalRepairAccruals(){
-  const employees=Array.isArray(mechanicalAccrualModel?.employees)?mechanicalAccrualModel.employees:[];
-  const collapsed=new Set((state.collapsed_body_employee_ids||[]).map(Number));
-  const groups=employees.map(employee=>{
-    const id=Number(employee.staff_member_id),expanded=!collapsed.has(id);
-    const items=Array.isArray(employee.items)?employee.items:[];
-    const rows=items.map(item=>{
-      const p=periodById.get(Number(item.reporting_period_id));
-      const period=p?cap(monthNames[p.month-1])+' '+p.year:'Период';
-      return '<div class="body-wo-card"><div class="body-wo-top"><div class="body-wo-number">'+esc(period)+'</div></div><div class="body-calc-grid"><div><span>Часы</span><b>'+esc(mechanicalHours(item.labor_hours))+'</b></div><div><span>Ставка</span><b>'+rub(item.hourly_rate)+'/ч</b></div><div class="accent"><span>Начислено</span><b>'+rub(item.accrual_amount)+'</b></div></div><div class="body-wo-meta">'+esc(mechanicalHours(item.labor_hours))+' × '+esc(rub(item.hourly_rate))+'/ч = '+esc(rub(item.accrual_amount))+'</div></div>';
-    }).join('');
-    return '<section class="body-employee-group"><button type="button" class="body-employee-head" data-mechanical-employee="'+id+'" aria-expanded="'+(expanded?'true':'false')+'"><span class="body-employee-avatar">'+bodyEmployeeIcon()+'</span><span class="body-employee-main"><strong>'+esc(shortName(employee.fio_full))+'</strong><small>'+esc(recordCountLabel(items.length))+'</small></span><span class="body-employee-total"><small>Всего начислено</small><strong>'+rub(employee.accrual_total)+'</strong></span>'+bodyChevron(expanded)+'</button>'+(expanded?'<div class="body-employee-orders">'+rows+'</div>':'')+'</section>';
-  }).join('');
-  $('content').innerHTML=bodyRepairHeader('Слесарные начисления')
-    +'<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по слесарному</span><strong>'+rub(mechanicalAccrualModel?.summary?.accrual_total)+'</strong></div><div class="body-summary-card"><span>Сотрудники</span><strong>'+num(mechanicalAccrualModel?.summary?.employee_count)+'</strong></div></div>'
-    +(groups||empty('Нет слесарных начислений за выбранный период'))
-    +filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
-  document.querySelector('[data-body-back]')?.addEventListener('click',()=>history.back());
-  document.querySelectorAll('[data-mechanical-employee]').forEach(b=>b.onclick=()=>{
-    const id=Number(b.dataset.mechanicalEmployee),next=new Set((state.collapsed_body_employee_ids||[]).map(Number));
-    if(next.has(id))next.delete(id);else next.add(id);
-    replace({...state,collapsed_body_employee_ids:[...next]});
-  });
-  document.querySelectorAll('.filter-dock [data-ftab]').forEach(b=>b.onclick=()=>openFilter(b.dataset.ftab));
-}
 function openMechanicalRepairAccruals(){push({...state,view:'mechanical_repair_accruals',employee_id:null,reporting_period_id:null,source_code:null,source_item_id:null,collapsed_body_employee_ids:[]});setAccrualScroll(0)}
 function openBodyRepairAccruals(){push({...state,view:'body_repair_accruals',employee_id:null,reporting_period_id:null,source_code:null,source_item_id:null,collapsed_body_employee_ids:[]});setAccrualScroll(0)}
 function openBodyRepairWorkOrders(){push({...state,view:'body_repair_work_orders'});setAccrualScroll(0)}
-function renderBodyRepairAccruals(){
-  if(Number(data.version)<9){$('content').innerHTML=empty('Для кузовных начислений требуется payload v9');return}
-  const groups=bodyRepairEmployeeGroups();
-  const scope=currentAccrualAggregate();
-  const uniqueCount=Number(data.version)>=10?bodyRepairVisibleWorkOrderCount():new Set(groups.flatMap(g=>g.items).map(i=>Number(i.work_order_id)).filter(Number.isFinite)).size;
-  const collapsed=new Set((state.collapsed_body_employee_ids||[]).map(Number));
-  const groupHtml=groups.map(group=>{
-    const employeeId=Number(group.staff_member_id),expanded=!collapsed.has(employeeId);
-    return `<section class="body-employee-group"><button type="button" class="body-employee-head" data-body-employee="${employeeId}" aria-expanded="${expanded?'true':'false'}"><span class="body-employee-avatar">${bodyEmployeeIcon()}</span><span class="body-employee-main"><strong>${esc(shortName(group.fio_full))}</strong><small>${esc(workOrderCountLabel(group.work_order_count))}</small></span><span class="body-employee-total"><small>Всего начислено</small><strong>${rub(group.accrual_total)}</strong></span>${bodyChevron(expanded)}</button>${expanded?`<div class="body-employee-orders">${group.items.map(bodyRepairWorkOrderCard).join('')}</div>`:''}</section>`;
-  }).join('');
-  $('content').innerHTML=bodyRepairHeader('Кузовные начисления')+
-    `<div class="body-summary-grid"><div class="body-summary-card"><span>Начислено по кузовному</span><strong>${rub(scope.body_accrual_total)}</strong></div><button type="button" class="body-summary-card link" data-body-work-orders><span>Заказ-наряды</span><strong>${uniqueCount}</strong>${bodyWorkOrderChevron()}</button></div>`+
-    (groupHtml||empty('Нет кузовных начислений за выбранный период'))+
-    filterSummary(false).replace('class="filter-summary"','class="filter-summary filter-dock"');
-  document.querySelector('[data-body-back]')?.addEventListener('click',()=>history.back());
-  document.querySelector('[data-body-work-orders]')?.addEventListener('click',openBodyRepairWorkOrders);
-  document.querySelectorAll('[data-body-employee]').forEach(b=>b.onclick=()=>{
-    const id=Number(b.dataset.bodyEmployee),next=new Set((state.collapsed_body_employee_ids||[]).map(Number));
-    if(next.has(id))next.delete(id);else next.add(id);
-    replace({...state,collapsed_body_employee_ids:[...next]});
-  });
-  document.querySelectorAll('.filter-dock [data-ftab]').forEach(b=>b.onclick=()=>openFilter(b.dataset.ftab));
-}
 function bodyRepairCatalogCard(w,membership=null,accruedMap=null){
   const auto=[w.automobile_make,w.automobile_model].filter(Boolean).join(' ')||'Автомобиль не указан';
   const customer=w.customer_display_name_short||w.customer_display_name||'Клиент не указан';
@@ -1334,7 +1289,7 @@ function renderBalanceMonth(){
 }
 function renderSummary(){const ids=new Set(selectedIds()),rows=summaries.filter(r=>ids.has(Number(r.reporting_period_id))).sort((a,b)=>(a.reporting_year-b.reporting_year)||(a.reporting_month-b.reporting_month)),latest=rows.at(-1),flowAcc=rows.reduce((s,r)=>s+num(r.accrual_total),0),flowPay=rows.reduce((s,r)=>s+num(r.payment_total),0);$('content').innerHTML=hero('Общий баланс к выплате',`<span class="${signClass(latest?.balance_to_pay)}">${rub(latest?.balance_to_pay)}</span>`,rows.length?periodLabel(latest.reporting_period_id):'—','последний выбранный месяц',[['Начислено',rub(flowAcc)],['Выплачено',rub(flowPay)],['Месяцев',String(rows.length)]])+`<div class="section-title"><h2>По месяцам</h2><span>канонический summary</span></div>`+(rows.length?`<div class="list">${rows.map(r=>`<button class="summary-card item" data-summary="${r.reporting_period_id}"><div class="summary-head"><div class="summary-month">${periodLabel(r.reporting_period_id,true)}</div><div class="summary-balance ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="summary-grid"><div class="summary-cell"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="summary-cell"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="summary-cell"><span>Входящий</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="summary-cell"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div></button>`).join('')}</div>`:empty());document.querySelectorAll('[data-summary]').forEach(b=>b.onclick=()=>push({...state,view:'summary_month',reporting_period_id:Number(b.dataset.summary)}))}
 function renderSummaryMonth(){const r=summaries.find(x=>Number(x.reporting_period_id)===Number(state.reporting_period_id));if(!r){$('content').innerHTML=empty();return}$('content').innerHTML=`<div class="detail-head"><div><h1>${periodLabel(r.reporting_period_id,true)}</h1><p>Общий баланс Staff Cost</p></div><div class="detail-total ${signClass(r.balance_to_pay)}">${rub(r.balance_to_pay)}</div></div><div class="detail-grid"><div class="detail-box"><span>Входящий баланс</span><b class="${signClass(r.opening_balance)}">${rub(r.opening_balance)}</b></div><div class="detail-box"><span>Начислено</span><b>${rub(r.accrual_total)}</b></div><div class="detail-box"><span>Выплачено</span><b>${rub(r.payment_total)}</b></div><div class="detail-box"><span>Дельта месяца</span><b class="${signClass(r.month_delta)}">${rub(r.month_delta)}</b></div></div><div class="source-row"><div class="source-name">Итоговый баланс</div><div class="source-val ${signClass(r.closing_balance)}">${rub(r.closing_balance)}</div></div>`}
-function renderBody(){if(state.section==='accruals'){if(state.view==='mechanical_repair_accruals')return renderMechanicalRepairAccruals();if(state.view==='body_repair_accruals')return renderBodyRepairAccruals();if(state.view==='body_repair_work_orders')return renderBodyRepairWorkOrders();if(state.view==='billing_payments')return renderBillingPayments();if(state.view==='employee')return renderAccrualEmployee();if(state.view==='source')return renderAccrualSource();if(state.view==='repair_positions')return renderAccrualRepairPositions();return renderAccruals()}if(state.section==='payments'){if(state.view==='payment_employee')return renderPaymentEmployee();if(state.view==='payment')return renderPaymentDetail();return renderPayments()}if(state.section==='balance'){if(state.view==='employee_balance')return renderBalanceEmployee();if(state.view==='balance_month')return renderBalanceMonth();return renderBalance()}if(state.section==='summary'){if(state.view==='summary_month')return renderSummaryMonth();return renderSummary()}state.section='accruals';state.view='list';renderAccruals()}
+function renderBody(){if(state.section==='accruals'){if(renderRegisteredAccrualScreen(state.view,{mechanical_repair_accruals:()=>renderMechanicalRepairAccruals({$,mechanicalAccrualModel,state,periodById,monthNames,cap,esc,mechanicalHours,rub,bodyEmployeeIcon,shortName,recordCountLabel,bodyChevron,bodyRepairHeader,num,empty,filterSummary,openFilter,replace,data,bodyRepairEmployeeGroups,currentAccrualAggregate,bodyRepairVisibleWorkOrderCount,workOrderCountLabel,bodyRepairWorkOrderCard,bodyWorkOrderChevron,openBodyRepairWorkOrders}),body_repair_accruals:()=>renderBodyRepairAccruals({$,mechanicalAccrualModel,state,periodById,monthNames,cap,esc,mechanicalHours,rub,bodyEmployeeIcon,shortName,recordCountLabel,bodyChevron,bodyRepairHeader,num,empty,filterSummary,openFilter,replace,data,bodyRepairEmployeeGroups,currentAccrualAggregate,bodyRepairVisibleWorkOrderCount,workOrderCountLabel,bodyRepairWorkOrderCard,bodyWorkOrderChevron,openBodyRepairWorkOrders})}))return;if(state.view==='body_repair_work_orders')return renderBodyRepairWorkOrders();if(state.view==='billing_payments')return renderBillingPayments();if(state.view==='employee')return renderAccrualEmployee();if(state.view==='source')return renderAccrualSource();if(state.view==='repair_positions')return renderAccrualRepairPositions();return renderAccruals()}if(state.section==='payments'){if(state.view==='payment_employee')return renderPaymentEmployee();if(state.view==='payment')return renderPaymentDetail();return renderPayments()}if(state.section==='balance'){if(state.view==='employee_balance')return renderBalanceEmployee();if(state.view==='balance_month')return renderBalanceMonth();return renderBalance()}if(state.section==='summary'){if(state.view==='summary_month')return renderSummaryMonth();return renderSummary()}state.section='accruals';state.view='list';renderAccruals()}
 let renderEpoch=0;
 async function render(){
   const token=++renderEpoch;
