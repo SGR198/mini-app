@@ -104,6 +104,17 @@ if(!renderer.includes("function paymentMomentText(payment)")||!renderer.includes
 if(!renderer.includes("function comparePaymentMoments(a,b)")||!renderer.includes(".sort((a,b)=>comparePaymentMoments(a,b))")) failures.push("Staff Cost paid_at sorting contract missing");
 
 
+// New sources are backend-calculated, and every card uses the canonical source_totals keys.
+const additionalCards=await readFile(join(root,"src/frontend/pages/staff-cost/accrual-cards.js"),"utf8");
+const additionalScreens=await readFile(join(root,"src/frontend/pages/staff-cost/additional-accrual-screens.js"),"utf8");
+for(const source of ["cleaner_compensation","manual_accrual","shift_compensation"]){
+  if(!additionalCards.includes('sourceCode:"'+source+'"')) failures.push('missing source card: '+source);
+  if(!renderer.includes('sourceTotals.'+source)) failures.push('missing source total binding: '+source);
+  if(!isAccrualDetailScreen(source+'_accruals')) failures.push('missing source view registry: '+source);
+  if(!additionalScreens.includes('source_code===sourceCode')) failures.push('source detail must filter by canonical code');
+}
+if(!renderer.includes('renderAdditionalAccrualSource(')) failures.push('additional source detail wiring missing');
+
 // All registered accrual detail views must use the SAME shell as worker screens.
 for(const view of Object.values(accrualScreenCodes)){
   if(!isAccrualDetailScreen(view)) failures.push(`accrual view missing shared layout: ${view}`);

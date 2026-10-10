@@ -3,7 +3,10 @@ export const accrualScreenCodes = Object.freeze({
   body_repair_accruals:"body_repair_accruals",
   mechanical_repair_accruals:"mechanical_repair_accruals",
   mechanical_service_advisor_accruals:"mechanical_service_advisor_accruals",
-  body_service_advisor_accruals:"body_service_advisor_accruals"
+  body_service_advisor_accruals:"body_service_advisor_accruals",
+  cleaner_compensation_accruals:"cleaner_compensation_accruals",
+  manual_accrual_accruals:"manual_accrual_accruals",
+  shift_compensation_accruals:"shift_compensation_accruals"
 });
 export function renderRegisteredAccrualScreen(view, screens){
   const renderer=screens[view];
