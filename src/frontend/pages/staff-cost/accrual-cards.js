@@ -3,7 +3,10 @@ export const accrualCards = Object.freeze([
   {code:"body_repair",label:"Кузовной",icon:"🔨",view:"body_repair_accruals",amountKey:"body",selector:"data-body-repair"},
   {code:"mechanical_service_advisor",sourceCode:"mechanical_repair_service_advisor",label:"Приёмщик слесарный",icon:"👤",view:"mechanical_service_advisor_accruals",amountKey:"advisor",selector:"data-mechanical-service-advisor"},
   {code:"body_service_advisor",sourceCode:"body_repair_service_advisor",label:"Приёмщик кузовной",icon:"👤",view:"body_service_advisor_accruals",amountKey:"bodyAdvisor",selector:"data-body-service-advisor"},
-  {code:"mechanical_repair",label:"Слесарный",icon:"🔧",view:"mechanical_repair_accruals",amountKey:"mech",selector:"data-mechanical-repair"}
+  {code:"mechanical_repair",label:"Слесарный",icon:"🔧",view:"mechanical_repair_accruals",amountKey:"mech",selector:"data-mechanical-repair"},
+  {code:"cleaner_compensation",sourceCode:"cleaner_compensation",label:"Уборщица",icon:"🧹",view:"cleaner_compensation_accruals",amountKey:"cleaner",selector:"data-cleaner-compensation"},
+  {code:"manual_accrual",sourceCode:"manual_accrual",label:"Ручное начисление",icon:"✍️",view:"manual_accrual_accruals",amountKey:"manual",selector:"data-manual-accrual"},
+  {code:"shift_compensation",sourceCode:"shift_compensation",label:"Часы смен",icon:"🕒",view:"shift_compensation_accruals",amountKey:"shift",selector:"data-shift-compensation"}
 ]);
 export function renderAccrualCards(amounts,formatAmount){
   return '<div class="submetrics">'+accrualCards.map(card=>{
