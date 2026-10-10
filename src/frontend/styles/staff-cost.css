@@ -11,7 +11,11 @@ body.accrual-list{background:#f7f8ff;--bottom-panel-height:58px;--bottom-control
 .accrual-list .shell{min-height:100dvh;border:0;border-radius:0;background:#f7f8ff;box-shadow:none;overflow:visible}
 .accrual-list .header,.accrual-list #controls{display:none!important}
 .accrual-list .content{padding:5px 16px 235px}
-.accrual-list .hero-sticky{position:sticky;top:0;z-index:12;background:#f7f8ff;padding-bottom:8px;isolation:isolate}
+/* The document scrolls in Telegram; fixed positioning keeps the total visible even
+   when the webview's scroll root prevents position:sticky from sticking. */
+.accrual-list .content:has(> .hero-sticky)::before{content:"";display:block;height:var(--accrual-hero-space,88px)}
+.accrual-list .hero-sticky{position:fixed;top:0;left:50%;transform:translateX(-50%);width:min(728px,calc(100% - 32px));z-index:40;background:#f7f8ff;padding:5px 0 8px;isolation:isolate}
+@media(max-width:360px){.accrual-list .hero-sticky{width:calc(100% - 24px)}}
 .tab .nav-icon{display:none}
 .accrual-list .tabs{position:fixed;z-index:45;bottom:calc(6px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(744px,calc(100% - 12px));height:var(--bottom-panel-height);background:var(--bottom-panel-bg);border-radius:26px;box-shadow:0 5px 28px #25205a15;padding:4px 7px;gap:2px}
 .accrual-list .tab{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;font-size:10.5px;white-space:normal;line-height:1.15;padding:1px 1px 5px;border:0;color:#8589ad;background:transparent;position:relative}
