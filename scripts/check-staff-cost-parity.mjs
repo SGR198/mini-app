@@ -117,7 +117,8 @@ if(!renderer.includes('renderAdditionalAccrualSource(')) failures.push('addition
 
 // The total hero alone is sticky; source cards scroll away together with employee rows.
 if(!renderer.includes('<div class="hero-sticky"><div class="hero">')) failures.push('accrual total sticky hero missing');
-if(!css.includes('.accrual-list .hero-sticky{position:sticky')) failures.push('accrual total sticky CSS missing');
+if(!css.includes('.accrual-list .hero-sticky{position:fixed')) failures.push('accrual total fixed viewport header missing');
+if(!css.includes('.content:has(> .hero-sticky)::before')) failures.push('fixed accrual header scroll spacer missing');
 if(renderer.includes('summary-sticky')||css.includes('.accrual-list .summary-sticky{position:sticky')) failures.push('source cards must not be inside sticky summary');
 if(!renderer.includes("renderAccrualCards({body,advisor,bodyAdvisor,mech,cleaner,manual,shift},rub) + filterSummary(false)")) failures.push('source cards must scroll with employee list');
 
